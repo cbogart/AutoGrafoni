@@ -1,6 +1,31 @@
 # Gutenberg to Grafoni Converter
 
 This script downloads books from Project Gutenberg, converts them to Grafoni script, and generates PDFs of the converted text.
+This is based on a Grafoni generator by Brent Werness; the original is here (http://github.com/Koloth/AutoGrafoni).
+
+
+## Motivation
+
+Grafoni (Hitlofi, 1913) is a sort of shorthand, but optimized more for fluent writing and readability than for pure speed. It
+represents text purely phonetically, without the system of abbreviations that make shorthands like Gregg so
+fast, and each character flows smoothly into the next with the junction always being on the central-line of
+the writing.
+
+To learn a writing system it's helpful to get fluent reading it, so you can recognize the
+readability of your own output. This script allows you to create copious reading material for
+practicing reading Grafoni.
+
+I think Grafoni is attractive in print, and I like experimenting with different writing systems.
+Here's a sample from Werness' project:
+
+![Grafoni Sample](grafoni_sample.png)
+
+## Warning
+
+This isn't working perfectly yet.  There's a lot of uninteresting front matter that's being parsed,
+the formatting isn't yet perfected, and I haven't checked to see how punctuation is handled.
+
+I'd like to pull this into Kindle to read, and it may be there are better formats than PDF.
 
 ## Features
 
@@ -116,6 +141,16 @@ The script requires:
 - Some books may have formatting issues that affect the conversion
 - Text wrapping is optimized for readability with natural line breaks
 
+## To Do
+- Text wrapping doesn't currently play well with placement in the PDF, so the
+  scale gets all wonky.
+- Consider different punctuation handling
+
+
 ## License
 
 This script is provided as-is for educational and personal use. 
+
+## References
+
+Hitlofi, Iven (1913). "Complete ELementary Instructor in Grafoni: A New Phonography; A World-Shorthand". https://drive.google.com/file/d/1HzReKI8w2_57kkeVKwTHKKghNFOSosEn/view
