@@ -24,9 +24,9 @@ Here's a sample from Werness' project:
 ## A note on "vibe coding"
 
 This project was also a test case for playing with Cursor.  A lot of the code was AI generated,
-and it did a surprising amount on its own with little steering, but in particular the font sizing issue is 
-the AI simply couldn't reason clearly about sizes, scaling, and line wrapping (which is why that's a
-to-do for me to go in and fix now -- the original project already does this right).  
+and it did a surprising amount on its own with little steering. However with the font sizing issue, 
+the AI simply couldn't reason clearly about sizes, scaling, and line wrapping, which is why that's a
+to-do for me to go in and fix now -- the original project already does this right.  
 
 But I see a serious limitation with AI -- there's a lot of code here that I haven't read yet, so it 
 will now take me a bit to figure out how it works to fix this problem. It's a little like the
