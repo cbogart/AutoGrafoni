@@ -32,7 +32,7 @@ and it did a surprising amount on its own with little steering. However with the
 the AI simply couldn't reason clearly about sizes, scaling, and line wrapping, which is why that's a
 to-do for me to go in and fix now -- the original project already does this right.  
 
-But I see a serious limitation with AI -- there's a lot of code here that I haven't read yet, so it 
+But I see a serious problem that AI coding still needs to overcome -- there's a lot of code here that I haven't read yet, so it 
 will now take me a bit to figure out how it works to fix this problem. It's a little like the
 mostly-self-driving cars that make you keep your hands on the wheel so you are mentally ready to
 take over in case of an emergency -- but cursor only kept me engaged on
