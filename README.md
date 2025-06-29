@@ -20,6 +20,21 @@ Here's a sample from Werness' project:
 
 ![Grafoni Sample](grafoni_sample.png)
 
+
+## A note on "vibe coding"
+
+This project was also a test case for playing with Cursor.  A lot of the code was AI generated,
+and it did a surprising amount on its own with little steering, but in particular the font sizing issue is 
+the AI simply couldn't reason clearly about sizes, scaling, and line wrapping (which is why that's a
+to-do for me to go in and fix now -- the original project already does this right).  
+
+But I see a serious limitation with AI -- there's a lot of code here that I haven't read yet, so it 
+will now take me a bit to figure out how it works to fix this problem. It's a little like the
+mostly-self-driving cars that make you keep your hands on the wheel so you are mentally ready to
+take over in case of an emergency -- but cursor only kept me engaged on
+a superficial/architectural level. So now there's serious mental ramp-up needed for me to take over
+and fix something by hand.
+
 ## Warning
 
 This isn't working perfectly yet.  There's a lot of uninteresting front matter that's being parsed,
