@@ -16,7 +16,11 @@ readability of your own output. This script allows you to create copious reading
 practicing reading Grafoni.
 
 I think Grafoni is attractive in print, and I like experimenting with different writing systems.
-Here's a sample from Werness' project:
+Here's a sample from Hitlofi's book:
+
+![Book Sample](grafoni_from_book.png)
+
+and from Werness' generator, which I think captures the spirit of it well:
 
 ![Grafoni Sample](grafoni_sample.png)
 
