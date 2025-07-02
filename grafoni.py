@@ -432,7 +432,6 @@ def keep_some_y_w(in_string):
     return in_string.replace('wu','uWu').replace('ji','ɪYɪ').replace('iɪŋ','ɪɪYɪŋ').replace('iiŋ','ɪYɪŋ')
 
 def grafoni_spell(string):
-    import pdb; pdb.set_trace()
     ipa_string = ipa.convert(string)
     ipa_string = keep_some_y_w(ipa_string)
     out = []

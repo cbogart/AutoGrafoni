@@ -3,7 +3,6 @@
 This script downloads books from Project Gutenberg, converts them to Grafoni script, and generates PDFs of the converted text.
 This is based on a Grafoni generator by Brent Werness; the original is here (http://github.com/Koloth/AutoGrafoni).
 
-
 ## Motivation
 
 Grafoni (Hitlofi, 1913) is a sort of shorthand, but optimized more for fluent writing and readability than for pure speed. It
@@ -40,8 +39,8 @@ and fix something by hand.
 
 ## Warning
 
-This isn't working perfectly yet.  There's a lot of uninteresting front matter that's being parsed,
-the formatting isn't yet perfected, and I haven't checked to see how punctuation is handled.
+This isn't perfect yet.  Some punctuation is missing, like quotes, !, and ?; but it's pretty 
+good and pretty readable.
 
 I'd like to pull this into Kindle to read, and it may be there are better formats than PDF.
 
@@ -61,8 +60,6 @@ I'd like to pull this into Kindle to read, and it may be there are better format
 ```bash
 pip install -r requirements.txt
 ```
-
-2. Make sure you have the existing `grafoni.py` file in the same directory.
 
 ## Usage
 
@@ -89,7 +86,7 @@ python gutenberg_to_grafoni.py "Alice in Wonderland" --output output/alice_grafo
 - `title`: Book title to search for (optional if using --book-id)
 - `--book-id`: Specific Project Gutenberg book ID
 - `--output, -o`: Output PDF filename (default: output/grafoni_book.pdf)
-- `--max-pages`: Maximum number of pages to generate (default: 50)
+- `--max-pages`: Maximum number of pages to generate (default: 50000)
 
 ## Examples
 
@@ -125,14 +122,6 @@ python gutenberg_to_grafoni.py --book-id 64317 --output output/moby_dick_grafoni
 - `gutenberg_cache/`: Directory for caching downloaded books
 - `output/`: Directory containing all generated PDFs and test files
 
-## Text Wrapping
-
-The script uses intelligent text wrapping that:
-- Wraps text at natural word boundaries
-- Maintains proportional heights (longer sentences = taller images)
-- Preserves aspect ratios without horizontal scaling
-- Uses consistent line spacing for readability
-
 ## Troubleshooting
 
 ### Common Issues
@@ -154,15 +143,6 @@ The script requires:
 
 - The script caches downloaded books in the `gutenberg_cache/` directory
 - All generated PDFs are saved to the `output/` directory
-- Large books may take a while to process
-- The quality of conversion depends on the text quality from Project Gutenberg
-- Some books may have formatting issues that affect the conversion
-- Text wrapping is optimized for readability with natural line breaks
-
-## To Do
-- Text wrapping doesn't currently play well with placement in the PDF, so the
-  scale gets all wonky.
-- Consider different punctuation handling
 
 
 ## License
@@ -171,4 +151,4 @@ This script is provided as-is for educational and personal use.
 
 ## References
 
-Hitlofi, Iven (1913). "Complete ELementary Instructor in Grafoni: A New Phonography; A World-Shorthand". https://drive.google.com/file/d/1HzReKI8w2_57kkeVKwTHKKghNFOSosEn/view
+Hitlofi, Iven (1913). "Complete Elementary Instructor in Grafoni: A New Phonography; A World-Shorthand". https://drive.google.com/file/d/1HzReKI8w2_57kkeVKwTHKKghNFOSosEn/view

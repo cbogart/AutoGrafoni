@@ -48,6 +48,7 @@ output/
 *.pdf
 *.svg
 *.png
+PROJECT_KNOWLEDGE.md
 
 # Jupyter
 .ipynb_checkpoints/

@@ -42,7 +42,7 @@ class GutenbergDownloader:
     
     def search_book(self, title):
         """Search for a book by title"""
-        search_url = f"{self.base_url}/search/?query={title.replace(' ', '+')}"
+        search_url = f"{self.base_url}/ebooks/search/?query={title.replace(' ', '+')}"
         print(f"Searching for: {title}")
         print(f"Search URL: {search_url}")
         
@@ -135,39 +135,111 @@ class GutenbergDownloader:
         # Remove extra whitespace
         text = re.sub(r'\s+', ' ', text)
         return text.strip()
+    
+    def extract_title(self, text):
+        """Extract book title from the downloaded text"""
+        # Look for common title patterns in Project Gutenberg books
+        title_patterns = [
+            r'Title:\s*([^\n\r]+)',
+            r'The Project Gutenberg eBook of\s+([^\n\r,]+)',
+            r'Title\s*:\s*([^\n\r]+)',
+            r'Title\s*=\s*([^\n\r]+)',
+            # Look for title after illustration and before "by Author"
+            r'\[Illustration\]\s*\n+\s*([^\n\r]+?)\s*\n+\s*by\s+',
+            # Look for standalone title lines (not followed by "by" immediately)
+            r'\n\s*([A-Z][^\n\r]+?)\s*\n\s*(?=by\s+[A-Z])',
+            # Look for title after START OF PROJECT GUTENBERG EBOOK
+            r'\*\*\* START OF THE PROJECT GUTENBERG EBOOK \d+ \*\*\*\s*\n+\s*\[Illustration\]\s*\n+\s*([^\n\r]+?)\s*\n',
+        ]
+        
+        for pattern in title_patterns:
+            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if match:
+                title = match.group(1).strip()
+                # Clean up the title - keep apostrophes and basic punctuation
+                title = re.sub(r'[^\w\s\-.,!?\'"()]', '', title)
+                title = re.sub(r'\s+', ' ', title).strip()
+                if title and len(title) > 3:  # Ensure we have a reasonable title
+                    return title
+        
+        return None
 
 
 class GrafoniConverter:
     """Converts text to Grafoni script"""
     
     def __init__(self):
-        self.page_height = 800  # Height for each SVG page
+        self.page_height = 1800  # Height for each SVG page
         self.wrap_width = 260   # Wrap width for text
+        self.paragraph_spacing = 2  # Space between paragraphs
     
-    def convert_text(self, text, max_pages=50):
-        """Convert text to Grafoni pages"""
+    def convert_text(self, text, max_pages=1000):
+        """Convert text to Grafoni pages with paragraph-based processing"""
         # Clean the text
         text = self._clean_text(text)
         
-        # Convert entire text to Grafoni pages
+        # Split text into paragraphs
+        
+        paragraphs = text.split('\n\n')
+        paragraphs = [p.strip() for p in paragraphs if p.strip()]
+        
+        
+        # Convert paragraphs to Grafoni pages
         grafoni_pages = []
+        current_page = []
+        current_page_height = 0
         page_count = 0
         
         try:
-            # Use the new page-based conversion function
-            for svg in grafoni_utils.to_svg_no_display(text, wrap=self.wrap_width, page_height=self.page_height):
+            for paragraph in paragraphs:
                 if page_count >= max_pages:
                     break
-                    
-                grafoni_pages.append([{
-                    'text': f"Page {page_count + 1}",
-                    'svg': svg
-                }])
-                page_count += 1
+                
+                # Calculate remaining space on current page
+                remaining_height = self.page_height - current_page_height
+                
+                # Convert paragraph to SVG(s)
+                svg_list = grafoni_utils.to_svg_no_display(
+                    paragraph, 
+                    wrap=self.wrap_width, 
+                    page_height=self.page_height,
+                    remaining_page_height=remaining_height
+                )
+                
+                # Add SVGs to current page or start new page
+                for svg in svg_list:
+                    # Check if this SVG fits on current page
+                    print(f"Adding {paragraph[:50]} to current page")
+                    if current_page_height + svg.height + self.paragraph_spacing <= self.page_height:
+                        # Add to current page
+                        current_page.append({
+                            'text': paragraph[:50] + "..." if len(paragraph) > 50 else paragraph,
+                            'svg': svg
+                        })
+                        current_page_height += svg.height + self.paragraph_spacing
+                    else:
+                        print(f"Starting new page with {paragraph[:50]}")
+                        # Start new page
+                        if current_page:
+                            grafoni_pages.append(current_page)
+                            page_count += 1
+                            if page_count >= max_pages:
+                                break
+                        
+                        # Start fresh page with this SVG
+                        current_page = [{
+                            'text': paragraph[:50] + "..." if len(paragraph) > 50 else paragraph,
+                            'svg': svg
+                        }]
+                        current_page_height = svg.height + self.paragraph_spacing
                 
         except Exception as e:
             print(f"Error converting text: {e}")
             return []
+        
+        # Add the last page if it has content
+        if current_page and page_count < max_pages:
+            grafoni_pages.append(current_page)
         
         return grafoni_pages
     
@@ -179,13 +251,13 @@ class GrafoniConverter:
         text = re.sub(r'\*\*\* END OF THE PROJECT GUTENBERG EBOOK .*? \*\*\*', '', text, flags=re.DOTALL)
         
         # Remove extra whitespace
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'[ \t]+', ' ', text)
         
         # Keep only basic ASCII characters that Grafoni supports
         text = re.sub(r'[^a-zA-Z0-9\s.,!?;:\'\"()-]', ' ', text)
         
         # Clean up extra spaces
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'[ \t]+', ' ', text)
         
         return text.strip()
     
@@ -202,6 +274,7 @@ class PDFGenerator:
     def __init__(self):
         self.page_width, self.page_height = A4
         self.margin = 50
+        self.between_paragraph_space = 2
     
     def generate_pdf(self, grafoni_pages, output_filename, book_title="Unknown Book"):
         """Generate PDF from Grafoni pages"""
@@ -225,41 +298,53 @@ class PDFGenerator:
                 c.setFont("Helvetica", 12)
                 c.drawString(self.margin, self.page_height - 70, "Converted from Project Gutenberg")
             
-            # Each page contains a single SVG
-            item = page[0]  # Each page is a list with one item
-            try:
-                svg_data = item['svg'].as_svg()
-                
-                # Convert SVG to PNG using cairosvg with white background
-                png_data = cairosvg.svg2png(
-                    bytestring=svg_data.encode('utf-8'),
-                    background_color='white'
-                )
-                
-                # Create a temporary file for the PNG
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    if png_data:
-                        tmp_file.write(png_data)
-                    tmp_file_path = tmp_file.name
-                
-                # Use SVG dimensions directly - no scaling
-                svg_width = item['svg'].width / 2.5
-                svg_height = item['svg'].height / 2.5
-                
-                # Center the image on the page
-                x_position = (self.page_width - svg_width) / 2
-                y_position = (self.page_height - svg_height) / 2
-                
-                c.drawImage(tmp_file_path, x_position, y_position, 
-                          width=svg_width, height=svg_height)
-                
-                # Clean up temporary file
-                os.unlink(tmp_file_path)
-                
-            except Exception as e:
-                print(f"Error processing SVG: {e}")
-                continue
+            # Each page can contain multiple SVGs (paragraphs)
+            y_position = self.page_height - 100 if page_num == 0 else self.page_height - 50
+            
+            for item in page:
+                try:
+                    svg_data = item['svg'].as_svg()
+                    
+                    # Convert SVG to PNG using cairosvg with white background
+                    png_data = cairosvg.svg2png(
+                        bytestring=svg_data.encode('utf-8'),
+                        background_color='white'
+                    )
+                    
+                    # Create a temporary file for the PNG
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                        if png_data:
+                            tmp_file.write(png_data)
+                        tmp_file_path = tmp_file.name
+                    
+                    # Use SVG dimensions directly - no scaling
+                    svg_width = item['svg'].width / 2.5
+                    svg_height = item['svg'].height / 2.5
+                    
+                    # Check if we need a new page
+                    if y_position - svg_height < 50:
+                        c.showPage()
+                        y_position = self.page_height - 50
+                        
+                        # Add page number
+                        c.setFont("Helvetica", 10)
+                        c.drawString(self.page_width - 100, 30, f"Page {page_num + 1}")
+                    
+                    # Position SVG on the page
+                    x_position =  self.margin #(self.page_width - svg_width) / 2
+                    
+                    c.drawImage(tmp_file_path, x_position, y_position - svg_height, 
+                              width=svg_width, height=svg_height)
+                    
+                    y_position -= svg_height + self.between_paragraph_space  # Add spacing between paragraphs
+                    
+                    # Clean up temporary file
+                    os.unlink(tmp_file_path)
+                    
+                except Exception as e:
+                    print(f"Error processing SVG: {e}")
+                    continue
             
             c.showPage()
         
@@ -272,7 +357,7 @@ def main():
     parser.add_argument('title', nargs='?', help='Book title to search for')
     parser.add_argument('--book-id', type=int, help='Specific Project Gutenberg book ID')
     parser.add_argument('--output', '-o', default='output/grafoni_book.pdf', help='Output PDF filename')
-    parser.add_argument('--max-pages', type=int, default=50, help='Maximum number of pages to generate')
+    parser.add_argument('--max-pages', type=int, default=50000, help='Maximum number of pages to generate')
     
     args = parser.parse_args()
     
@@ -304,6 +389,17 @@ def main():
     
     print(f"Downloaded {len(text)} characters of text.")
     
+    # Extract book title
+    book_title = args.title
+    if not book_title:
+        extracted_title = downloader.extract_title(text)
+        if extracted_title:
+            book_title = extracted_title
+            print(f"Extracted title: {book_title}")
+        else:
+            book_title = f"Book {book_id}"
+            print(f"Could not extract title, using: {book_title}")
+    
     # Convert to Grafoni
     print("Converting to Grafoni script...")
     grafoni_pages = converter.convert_text(text, max_pages=args.max_pages)
@@ -312,7 +408,6 @@ def main():
     
     # Generate PDF
     print("Generating PDF...")
-    book_title = args.title or f"Book {book_id}"
     pdf_generator.generate_pdf(grafoni_pages, args.output, book_title)
     
     print("Conversion complete!")
