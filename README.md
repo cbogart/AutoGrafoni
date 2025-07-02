@@ -109,9 +109,9 @@ python gutenberg_to_grafoni.py --book-id 64317 --output output/moby_dick_grafoni
 
 1. **Book Search**: The script searches Project Gutenberg for books matching the title
 2. **Book Download**: Downloads the book text in UTF-8 format
-3. **Text Processing**: Cleans the text and splits it into sentences
-4. **Grafoni Conversion**: Converts each sentence to Grafoni phonetic script with natural wrapping
-5. **PDF Generation**: Creates a PDF with the Grafoni text, properly formatted
+3. **Text Processing**: Cleans the text and splits it into paragraph
+4. **Grafoni Conversion**: Converts each paragraph to IPA and thence to Grafoni phonetic script in SVGs
+5. **PDF Generation**: Creates a PDF with the SVGs pasted one after the next
 
 ## File Structure
 
@@ -124,11 +124,6 @@ python gutenberg_to_grafoni.py --book-id 64317 --output output/moby_dick_grafoni
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **Book not found**: Try using a more specific title or use the book ID directly
-2. **Conversion errors**: Some books may have formatting issues that cause conversion problems
-3. **PDF generation fails**: Make sure all dependencies are installed correctly
 
 ### Dependencies
 
@@ -143,7 +138,6 @@ The script requires:
 
 - The script caches downloaded books in the `gutenberg_cache/` directory
 - All generated PDFs are saved to the `output/` directory
-
 
 ## License
 
