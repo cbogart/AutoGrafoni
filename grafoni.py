@@ -429,10 +429,26 @@ ligatures = {
 }
 
 def keep_some_y_w(in_string):
-    return in_string.replace('wu','uWu').replace('ji','ɪYɪ').replace('iɪŋ','ɪɪYɪŋ').replace('iiŋ','ɪYɪŋ')
+    return in_string.replace('wu','uWu').replace('ji','ɪYɪ').replace('iɪŋ','ɪɪYɪŋ').replace('iiŋ','ɪYɪŋ').replace("oʊ","ou").replace("aʊ","au")
+
+def cleaner_ipa(in_string):
+    import re
+    raw_ipa = ipa.convert(re.sub(r'([\w\'])([^\w\'\s]+)([\w\'])', r'\1\2 \3', in_string))
+
+    
+    with open("bad_ipa_log.txt", "a") as f:
+        for i in raw_ipa.split(" "):
+            if i.endswith("*"):
+                f.write(i + "\n")
+                if i == "ll*":
+                    print(in_string)
+
+    return raw_ipa
+
+    
 
 def grafoni_spell(string):
-    ipa_string = ipa.convert(string)
+    ipa_string = cleaner_ipa(string)
     ipa_string = keep_some_y_w(ipa_string)
     out = []
     for letter in ipa_string:

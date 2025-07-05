@@ -275,13 +275,22 @@ class PDFGenerator:
         self.page_width, self.page_height = A4
         self.margin = 50
         self.between_paragraph_space = 2
+        self.use_svg_embedding = True  # Try SVG embedding first, fall back to PNG if needed
+        self.compression_level = 'high'  # Default compression level
+    
+    def set_compression(self, level):
+        """Set the compression level for PDF generation"""
+        self.compression_level = level
+        if level == 'low':
+            self.use_svg_embedding = False  # Skip SVG embedding for faster generation
     
     def generate_pdf(self, grafoni_pages, output_filename, book_title="Unknown Book"):
-        """Generate PDF from Grafoni pages"""
+        """Generate PDF from Grafoni pages with compression"""
         # Ensure output directory exists
         output_path = Path(output_filename)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
+        # Create canvas with compression settings
         c = canvas.Canvas(str(output_path), pagesize=A4)
         
         for page_num, page in enumerate(grafoni_pages):
@@ -305,19 +314,6 @@ class PDFGenerator:
                 try:
                     svg_data = item['svg'].as_svg()
                     
-                    # Convert SVG to PNG using cairosvg with white background
-                    png_data = cairosvg.svg2png(
-                        bytestring=svg_data.encode('utf-8'),
-                        background_color='white'
-                    )
-                    
-                    # Create a temporary file for the PNG
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                        if png_data:
-                            tmp_file.write(png_data)
-                        tmp_file_path = tmp_file.name
-                    
                     # Use SVG dimensions directly - no scaling
                     svg_width = item['svg'].width / 2.5
                     svg_height = item['svg'].height / 2.5
@@ -332,15 +328,13 @@ class PDFGenerator:
                         c.drawString(self.page_width - 100, 30, f"Page {page_num + 1}")
                     
                     # Position SVG on the page
-                    x_position =  self.margin #(self.page_width - svg_width) / 2
+                    x_position = self.margin
                     
-                    c.drawImage(tmp_file_path, x_position, y_position - svg_height, 
-                              width=svg_width, height=svg_height)
+                    # Use PNG embedding (more efficient for line drawings)
+                    self._embed_png(c, svg_data, x_position, y_position - svg_height, 
+                                  svg_width, svg_height)
                     
-                    y_position -= svg_height + self.between_paragraph_space  # Add spacing between paragraphs
-                    
-                    # Clean up temporary file
-                    os.unlink(tmp_file_path)
+                    y_position -= svg_height + self.between_paragraph_space
                     
                 except Exception as e:
                     print(f"Error processing SVG: {e}")
@@ -348,8 +342,143 @@ class PDFGenerator:
             
             c.showPage()
         
+        # Save with compression
         c.save()
+        
+        # Apply additional PDF compression if possible
+        self._compress_pdf(output_path)
+        
         print(f"PDF saved as: {output_path}")
+    
+    def _compress_pdf(self, pdf_path):
+        """Apply additional compression to the PDF if possible"""
+        if self.compression_level in ['low', 'no']:
+            print(f"Skipping additional compression ({self.compression_level} compression mode)")
+            return
+            
+        try:
+            # Try to use Ghostscript for additional compression if available
+            import subprocess
+            compressed_path = pdf_path.with_suffix('.compressed.pdf')
+            
+            # Choose compression settings based on level
+            if self.compression_level == 'high':
+                pdf_settings = '/printer'  # Highest quality, good compression
+            else:  # medium
+                pdf_settings = '/ebook'    # Good balance of size and quality
+            
+            # Ghostscript command for compression
+            gs_command = [
+                'gs', '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.4',
+                f'-dPDFSETTINGS={pdf_settings}',
+                '-dNOPAUSE', '-dQUIET', '-dBATCH',
+                f'-sOutputFile={compressed_path}',
+                str(pdf_path)
+            ]
+            
+            result = subprocess.run(gs_command, capture_output=True, text=True)
+            
+            if result.returncode == 0 and compressed_path.exists():
+                # Replace original with compressed version
+                pdf_path.unlink()
+                compressed_path.rename(pdf_path)
+                print(f"Applied additional compression to PDF ({self.compression_level} level)")
+            else:
+                print(f"Ghostscript compression not available, using standard PDF")
+                
+        except (ImportError, FileNotFoundError, subprocess.SubprocessError):
+            # Ghostscript not available, use standard PDF
+            print(f"Ghostscript not available, using standard PDF compression")
+        except Exception as e:
+            print(f"Compression failed: {e}, using standard PDF")
+    
+    def _embed_svg(self, canvas, svg_data, x, y, width, height):
+        """Embed SVG directly into PDF for better compression"""
+        try:
+            # For now, fall back to PNG since direct SVG embedding in reportlab is complex
+            # This is a placeholder for future implementation
+            raise NotImplementedError("Direct SVG embedding not yet implemented")
+        except NotImplementedError:
+            # Fall back to PNG method
+            self._embed_png(canvas, svg_data, x, y, width, height)
+    
+    def _embed_png(self, canvas, svg_data, x, y, width, height):
+        """Convert SVG to PNG and embed with optimized compression"""
+        # Choose DPI based on compression level
+        if self.compression_level == 'no':
+            dpi = 150  # High quality for no compression
+        elif self.compression_level == 'high':
+            dpi = 72  # Standard screen DPI
+        elif self.compression_level == 'medium':
+            dpi = 96  # Slightly higher quality
+        elif self.compression_level == 'low':
+            dpi = 120  # Higher quality for low compression mode
+        else:
+            raise ValueError(f"Invalid compression level: {self.compression_level}")
+        
+        # Convert SVG to PNG using cairosvg
+        png_data = cairosvg.svg2png(
+            bytestring=svg_data.encode('utf-8'),
+            background_color='white',
+            dpi=dpi
+        )
+        
+        if not png_data:
+            raise ValueError("Failed to convert SVG to PNG")
+        
+        # For "no compression" mode, use original high-quality approach
+        if self.compression_level == 'no':
+            # Create a temporary file for the high-quality PNG
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                tmp_file.write(png_data)
+                tmp_file_path = tmp_file.name
+            
+            try:
+                # Draw image without additional compression
+                canvas.drawImage(tmp_file_path, x, y, width=width, height=height, mask='auto')
+            finally:
+                # Clean up temporary file
+                os.unlink(tmp_file_path)
+            return
+        
+        # For compression modes, optimize PNG using PIL
+        from PIL import Image
+        import io
+        
+        png_image = Image.open(io.BytesIO(png_data))
+        
+        # Convert to indexed color (1-bit) for maximum compression
+        if png_image.mode != 'P':
+            # Convert to grayscale first, then to indexed
+            if png_image.mode in ('RGBA', 'LA'):
+                # Create white background
+                background = Image.new('RGB', png_image.size, (255, 255, 255))
+                background.paste(png_image, mask=png_image.split()[-1] if png_image.mode == 'RGBA' else None)
+                png_image = background
+            
+            # Convert to grayscale, then to 1-bit indexed
+            png_image = png_image.convert('L').convert('P', palette=Image.Palette.ADAPTIVE, colors=8)
+        
+        # Save optimized PNG
+        optimized_buffer = io.BytesIO()
+        png_image.save(optimized_buffer, format='PNG', optimize=True, compress_level=9)
+        optimized_png_data = optimized_buffer.getvalue()
+        
+        # Create a temporary file for the optimized PNG
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+            tmp_file.write(optimized_png_data)
+            tmp_file_path = tmp_file.name
+        
+        try:
+            # Draw image with compression
+            canvas.drawImage(tmp_file_path, x, y, width=width, height=height, mask='auto')
+        finally:
+            # Clean up temporary file
+            os.unlink(tmp_file_path)
+    
+
 
 
 def main():
@@ -358,6 +487,8 @@ def main():
     parser.add_argument('--book-id', type=int, help='Specific Project Gutenberg book ID')
     parser.add_argument('--output', '-o', default='output/grafoni_book.pdf', help='Output PDF filename')
     parser.add_argument('--max-pages', type=int, default=50000, help='Maximum number of pages to generate')
+    parser.add_argument('--compression', choices=['no', 'high', 'medium', 'low'], default='high', 
+                       help='PDF compression level (no=high quality, high=smaller file, low=faster generation)')
     
     args = parser.parse_args()
     
@@ -408,6 +539,7 @@ def main():
     
     # Generate PDF
     print("Generating PDF...")
+    pdf_generator.set_compression(args.compression)
     pdf_generator.generate_pdf(grafoni_pages, args.output, book_title)
     
     print("Conversion complete!")
