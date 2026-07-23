@@ -25,7 +25,8 @@ def test_text_wrapping():
         
         try:
             # Convert with consistent wrap width
-            svg = grafoni_utils.to_svg_no_display(sentence, wrap=700, line_space=20)
+            svg_list = grafoni_utils.to_svg_no_display(sentence, wrap=700, line_space=20)
+            svg = svg_list[0]
             
             print(f"   ✓ SVG created successfully")
             print(f"   Original text length: {len(sentence)} characters")

@@ -81,12 +81,24 @@ python gutenberg_to_grafoni.py --book-id 1342
 python gutenberg_to_grafoni.py "Alice in Wonderland" --output output/alice_grafoni.pdf --max-pages 20
 ```
 
+Larger text for easier reading (e.g. on a tablet):
+```bash
+python gutenberg_to_grafoni.py --book-id 11 --scale 1.5 --output output/alice_large.pdf
+```
+
+Smaller text to fit more per page:
+```bash
+python gutenberg_to_grafoni.py --book-id 11 --scale 0.75 --output output/alice_compact.pdf
+```
+
 ### Command Line Arguments
 
 - `title`: Book title to search for (optional if using --book-id)
 - `--book-id`: Specific Project Gutenberg book ID
 - `--output, -o`: Output PDF filename (default: output/grafoni_book.pdf)
 - `--max-pages`: Maximum number of pages to generate (default: 50000)
+- `--compression`: PDF compression level: `no`, `high`, `medium`, or `low` (default: high)
+- `--scale`: Text size scale factor (default: 1.0). Values above 1 enlarge Grafoni script and English labels; line wrapping and pagination adjust so content still fits the page.
 
 ## Examples
 

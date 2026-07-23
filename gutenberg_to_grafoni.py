@@ -168,10 +168,63 @@ class GutenbergDownloader:
 class GrafoniConverter:
     """Converts text to Grafoni script"""
     
-    def __init__(self):
-        self.page_height = 1800  # Height for each SVG page
-        self.wrap_width = 260   # Wrap width for text
-        self.paragraph_spacing = 2  # Space between paragraphs
+    # Wrap width in stroke units at scale=1.0; divided by scale so enlarged
+    # text still fits the page width.
+    BASE_WRAP_WIDTH = 260
+    # Extra stroke-unit margin so sheared glyph curves stay inside the page
+    # (bounding box extends past the wrap-cursor visual_x).
+    WRAP_BBOX_SLACK = 12
+    # Must match PDFGenerator / grafoni_utils SVG emission.
+    BASE_SVG_DIVISOR = 2.5
+    SVG_RENDER_SCALE = 4
+    SVG_PADDING = 10
+    V_SCALE = 0.5
+    LINE_SPACE = 20
+    # PDF margins matching PDFGenerator (non-title top chrome).
+    PDF_TOP_MARGIN = 50
+    PDF_BOTTOM_MARGIN = 50
+    PDF_SIDE_MARGIN = 50
+    
+    def __init__(self, scale=1.0):
+        if scale <= 0:
+            raise ValueError("scale must be positive")
+        self.scale = scale
+        self.paragraph_spacing = 2  # Space between paragraphs (SVG units)
+        
+        page_w, page_h = A4
+        top = self.PDF_TOP_MARGIN * scale
+        content_height_pt = page_h - top - self.PDF_BOTTOM_MARGIN
+        # SVG-unit slack so glyph vertical bbox does not push a "full"
+        # page chunk past the printable PDF height (~30+ observed at scale 2).
+        page_bbox_slack_svg = 56
+        self.page_height = (
+            content_height_pt / scale * self.BASE_SVG_DIVISOR - page_bbox_slack_svg
+        )
+        
+        # Wrap so that SVG width after render fits the PDF content width.
+        # Cap at the historical BASE_WRAP_WIDTH/scale so scale=1 stays familiar.
+        content_width_pt = page_w - 2 * self.PDF_SIDE_MARGIN
+        max_svg_width = content_width_pt / scale * self.BASE_SVG_DIVISOR
+        max_stroke_wrap = (
+            (max_svg_width - 2 * self.SVG_RENDER_SCALE * self.SVG_PADDING)
+            / self.SVG_RENDER_SCALE
+        ) - self.WRAP_BBOX_SLACK
+        self.wrap_width = min(self.BASE_WRAP_WIDTH / scale, max_stroke_wrap)
+        
+        # Minimum remaining SVG height worth filling (~one Grafoni line).
+        self.min_remaining_height = self._stroke_y_to_svg(self.LINE_SPACE)
+    
+    @classmethod
+    def _stroke_y_to_svg(cls, stroke_y):
+        """Convert pre-v_scale stroke Y to SVG pixel height (see svgStrokes)."""
+        return (cls.SVG_RENDER_SCALE * cls.V_SCALE * stroke_y
+                + 2 * cls.SVG_RENDER_SCALE * cls.SVG_PADDING)
+    
+    @classmethod
+    def _svg_to_stroke_y(cls, svg_height):
+        """Convert SVG pixel budget to stroke-Y budget for to_svg_no_display."""
+        usable = svg_height - 2 * cls.SVG_RENDER_SCALE * cls.SVG_PADDING
+        return max(cls.LINE_SPACE, usable / (cls.SVG_RENDER_SCALE * cls.V_SCALE))
     
     def convert_text(self, text, max_pages=1000):
         """Convert text to Grafoni pages with paragraph-based processing"""
@@ -195,15 +248,28 @@ class GrafoniConverter:
                 if page_count >= max_pages:
                     break
                 
-                # Calculate remaining space on current page
+                # Calculate remaining space on current page (SVG units)
                 remaining_height = self.page_height - current_page_height
                 
-                # Convert paragraph to SVG(s)
+                # Skip unusable stubs: start a fresh page rather than leaving
+                # a blank gap when the next paragraph cannot fit one line.
+                if remaining_height < self.min_remaining_height and current_page:
+                    grafoni_pages.append(current_page)
+                    page_count += 1
+                    if page_count >= max_pages:
+                        break
+                    current_page = []
+                    current_page_height = 0
+                    remaining_height = self.page_height
+                
+                # to_svg_no_display measures Y in stroke units; convert budget.
                 svg_list = grafoni_utils.to_svg_no_display(
                     paragraph, 
                     wrap=self.wrap_width, 
-                    page_height=self.page_height,
-                    remaining_page_height=remaining_height
+                    page_height=self._svg_to_stroke_y(self.page_height),
+                    remaining_page_height=self._svg_to_stroke_y(remaining_height),
+                    line_space=self.LINE_SPACE,
+                    v_scale=self.V_SCALE,
                 )
                 
                 # Add SVGs to current page or start new page
@@ -271,10 +337,16 @@ class GrafoniConverter:
 class PDFGenerator:
     """Generates PDF from Grafoni SVG pages"""
     
-    def __init__(self):
+    # Display scale applied on top of the historical /2.5 placement factor.
+    BASE_SVG_DIVISOR = 2.5
+    
+    def __init__(self, scale=1.0):
+        if scale <= 0:
+            raise ValueError("scale must be positive")
         self.page_width, self.page_height = A4
         self.margin = 50
-        self.between_paragraph_space = 2
+        self.scale = scale
+        self.between_paragraph_space = 2 * scale
         self.use_svg_embedding = True  # Try SVG embedding first, fall back to PNG if needed
         self.compression_level = 'high'  # Default compression level
     
@@ -292,40 +364,49 @@ class PDFGenerator:
         
         # Create canvas with compression settings
         c = canvas.Canvas(str(output_path), pagesize=A4)
+        s = self.scale
+        page_font = 10 * s
+        title_font = 16 * s
+        subtitle_font = 12 * s
+        top_offset = 50 * s
+        subtitle_offset = 70 * s
+        first_content_offset = 100 * s
+        page_num_x = self.page_width - max(100, 40 + 60 * s)
         
         for page_num, page in enumerate(grafoni_pages):
             print(f"Generating page {page_num + 1}/{len(grafoni_pages)}")
             
             # Add page number
-            c.setFont("Helvetica", 10)
-            c.drawString(self.page_width - 100, 30, f"Page {page_num + 1}")
+            c.setFont("Helvetica", page_font)
+            c.drawString(page_num_x, 30, f"Page {page_num + 1}")
             
             # Add title on first page
             if page_num == 0:
-                c.setFont("Helvetica-Bold", 16)
-                c.drawString(self.margin, self.page_height - 50, f"{book_title} - Grafoni Script")
-                c.setFont("Helvetica", 12)
-                c.drawString(self.margin, self.page_height - 70, "Converted from Project Gutenberg")
+                c.setFont("Helvetica-Bold", title_font)
+                c.drawString(self.margin, self.page_height - top_offset, f"{book_title} - Grafoni Script")
+                c.setFont("Helvetica", subtitle_font)
+                c.drawString(self.margin, self.page_height - subtitle_offset, "Converted from Project Gutenberg")
             
             # Each page can contain multiple SVGs (paragraphs)
-            y_position = self.page_height - 100 if page_num == 0 else self.page_height - 50
+            y_position = self.page_height - first_content_offset if page_num == 0 else self.page_height - top_offset
             
             for item in page:
                 try:
                     svg_data = item['svg'].as_svg()
                     
-                    # Use SVG dimensions directly - no scaling
-                    svg_width = item['svg'].width / 2.5
-                    svg_height = item['svg'].height / 2.5
+                    # Scale display size; wrap width was adjusted inversely so
+                    # full lines still fit the page width.
+                    svg_width = item['svg'].width / self.BASE_SVG_DIVISOR * s
+                    svg_height = item['svg'].height / self.BASE_SVG_DIVISOR * s
                     
                     # Check if we need a new page
                     if y_position - svg_height < 50:
                         c.showPage()
-                        y_position = self.page_height - 50
+                        y_position = self.page_height - top_offset
                         
                         # Add page number
-                        c.setFont("Helvetica", 10)
-                        c.drawString(self.page_width - 100, 30, f"Page {page_num + 1}")
+                        c.setFont("Helvetica", page_font)
+                        c.drawString(page_num_x, 30, f"Page {page_num + 1}")
                     
                     # Position SVG on the page
                     x_position = self.margin
@@ -489,6 +570,9 @@ def main():
     parser.add_argument('--max-pages', type=int, default=50000, help='Maximum number of pages to generate')
     parser.add_argument('--compression', choices=['no', 'high', 'medium', 'low'], default='high', 
                        help='PDF compression level (no=high quality, high=smaller file, low=faster generation)')
+    parser.add_argument('--scale', type=float, default=1.0,
+                       help='Text size scale factor (default: 1.0). Values >1 enlarge Grafoni and '
+                            'English labels; wrap and pagination adjust to keep content on the page.')
     
     args = parser.parse_args()
     
@@ -498,10 +582,14 @@ def main():
         print("Example: python gutenberg_to_grafoni.py --book-id 1342")
         sys.exit(1)
     
+    if args.scale <= 0:
+        print("Error: --scale must be a positive number.")
+        sys.exit(1)
+    
     # Initialize components
     downloader = GutenbergDownloader()
-    converter = GrafoniConverter()
-    pdf_generator = PDFGenerator()
+    converter = GrafoniConverter(scale=args.scale)
+    pdf_generator = PDFGenerator(scale=args.scale)
     
     # Get book ID
     book_id = args.book_id
