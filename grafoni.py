@@ -122,6 +122,11 @@ letter_forms = {
     ";": [('move',2,2),('quadratic',3,3,2,4),('move',2,-2),('quadratic',2,-2.25,2.125,-2.25),('quadratic',2.25,-2.25,2.25,-2),('quadratic',2.25,-1.75,2.125,-1.75),('quadratic',2,-1.75,2,-2),('move',4,0)],   
     #"-": [('move',2,-1),('line',3,1),('move',5,0)], #from the 1910 edition
     "-": [('move',2,-1),('line',4,-1),('move',2,1),('line',4,1),('move',6,0)], #from the 1913 edition
+    # Hitlofi uses ordinary English punctuation (except the doubled hyphen above).
+    "?": [('move',1,-6),('cubic',1,-9,4.5,-9,4.5,-6.5),('quadratic',4.5,-4.5,2.5,-4),('line',2.5,-2),('move',2.5,0),('quadratic',2.5,0.25,2.625,0.25),('quadratic',2.75,0.25,2.75,0),('quadratic',2.75,-0.25,2.625,-0.25),('quadratic',2.5,-0.25,2.5,0),('move',5,0)],
+    "!": [('move',2.5,-8),('line',2.5,-2),('move',2.5,0),('quadratic',2.5,0.25,2.625,0.25),('quadratic',2.75,0.25,2.75,0),('quadratic',2.75,-0.25,2.625,-0.25),('quadratic',2.5,-0.25,2.5,0),('move',4.5,0)],
+    '"': [('move',1.5,-9),('line',1.5,-6.5),('move',3,-9),('line',3,-6.5),('move',4.5,0)],
+    "'": [('move',1.5,-9),('line',1.5,-6.5),('move',3,0)],
     "(": [('move',3,6),('quadratic',0,0,3,-6),('move',5,0)],
     ")": [('move',2,6),('quadratic',5,0,2,-6),('move',5,0)],
 
@@ -318,6 +323,25 @@ kerning[("zh","m")] = (-1,1)
 kerning[("m","sh")] = (1,-1)
 kerning[("m","zh")] = (1,-1)
 
+# a little room before a downward loop that would otherwise sit on the t/d stem ("savagely", "strangely")
+for _a in ["t","d"]:
+    for _b in ["sh","zh"]:
+        kerning[(_a,_b)] = (1,-1)
+# s/z followed by m without the s_m ligature (e.g. after n_s in "transmitter")
+kerning[("s","m")] = (1,-1)
+kerning[("z","m")] = (1,-1)
+# keys may also name a whole ligature on the left; these keep the th/dh descender clear of a following loop ("nothingness")
+for _a in ["th_uv1","dh_uv1"]:
+    for _b in ["n","ng","sh","zh","f","v"]:
+        kerning[(_a,_b)] = (2.5,-1)
+
+def pair_kerning(last_char, glyph):
+    """(left kern, right kern, nudge) between the previous glyph and the next one."""
+    key = (last_char, first(glyph))
+    if key not in kerning:
+        key = (last(last_char), first(glyph))
+    return kerning[key] + (nudge_kern[(last(last_char), first(glyph))],)
+
 ligatures = {
     "n_t": [('cubic',1,2,1,4,0,4),('cubic',-1,4,-1,2,0,0),('quadratic',1,-2,1,-4),('line',1,0)],
     "n_d": [('cubic',1,2,1,4,0,4),('cubic',-1,4,-1,2,0,0),('quadratic',1,-2,1,-4),('line',1,-8),('line',1,0)],
@@ -425,14 +449,237 @@ ligatures = {
     "m_z": [('cubic',1,1,1,2,0.5,2),('cubic',0,2,0,1,0,0), ('quadratic', 0, -8, 1, -8), ('quadratic', 2, -8, 2, 0)],
 
     "s_m": [('quadratic', 0, -4, 1, -4), ('quadratic', 2, -4, 2, 0), ('cubic', 2, 1, 2, 2, 1.5, 2), ('cubic', 1, 2, 1, 1, 2, 0)],
+    # th/dh rising straight into t/d, instead of a flat run between them ("withdrew")
+    "th_t": [('line',0,4),('line',0,2),('quadratic',0,0,1,-2),('line',1,-4),('line',1,0)],
+    "th_d": [('line',0,4),('line',0,2),('quadratic',0,0,1,-2),('line',1,-8),('line',1,0)],
+    "dh_t": [('line',0,8),('line',0,2),('quadratic',0,0,1,-2),('line',1,-4),('line',1,0)],
+    "dh_d": [('line',0,8),('line',0,2),('quadratic',0,0,1,-2),('line',1,-8),('line',1,0)],
+    "th_t-end": [('line',0,4),('line',0,2),('quadratic',0,0,1,-2),('line',1,-4),('move',1,0)],
+    "th_d-end": [('line',0,4),('line',0,2),('quadratic',0,0,1,-2),('line',1,-8),('move',1,0)],
+    "dh_t-end": [('line',0,8),('line',0,2),('quadratic',0,0,1,-2),('line',1,-4),('move',1,0)],
+    "dh_d-end": [('line',0,8),('line',0,2),('quadratic',0,0,1,-2),('line',1,-8),('move',1,0)],
     "z_m": [('quadratic', 0, -8, 1, -8), ('quadratic', 2, -8, 2, 0), ('cubic', 2, 1, 2, 2, 1.5, 2), ('cubic', 1, 2, 1, 1, 2, 0)]
 }
 
 def keep_some_y_w(in_string):
-    return in_string.replace('wu','uWu').replace('ji','ɪYɪ').replace('iɪŋ','ɪɪYɪŋ').replace('iiŋ','ɪYɪŋ')
+    return in_string.replace('wu','uWu').replace('ji','ɪYɪ').replace('iɪŋ','ɪɪYɪŋ').replace('iiŋ','ɪYɪŋ').replace("oʊ","ou").replace("aʊ","au")
+
+# Pronunciation lookup.
+#
+# eng_to_ipa.convert() picks the alphabetically *last* variant of each word
+# (cmu_to_ipa sorts them, get_top takes [-1]), which gives reduced or odd
+# forms: "hundred" -> hənərd, "nice" -> nis, "us" -> U.S.  We query the CMU
+# table ourselves so the dictionary's own primary pronunciation comes first.
+import re
+import sqlite3
+from os.path import join, dirname
+from eng_to_ipa.transcribe import cmu_to_ipa
+
+_cmu_cursor = None
+_cmu_cache = {}
+
+def cmu_variants(word):
+    """IPA pronunciations of a lower-case word, in CMU dictionary order ([] if unknown)."""
+    global _cmu_cursor
+    if word not in _cmu_cache:
+        if _cmu_cursor is None:
+            _cmu_cursor = sqlite3.connect(join(dirname(ipa.__file__), "resources", "CMU_dict.db")).cursor()
+        rows = _cmu_cursor.execute("SELECT phonemes FROM dictionary WHERE word = ? ORDER BY id", (word,)).fetchall()
+        _cmu_cache[word] = [cmu_to_ipa([[r[0]]])[0][0] for r in rows]
+    return _cmu_cache[word]
+
+# Words whose dictionary primary isn't what a reader expects.
+pronunciation_overrides = {
+    "us": "əs",
+}
+
+# Heteronyms whose pronunciation follows part of speech: (noun/adjective form, verb form).
+# The verb form is used after a word that usually precedes a verb.
+heteronyms = {
+    "close": ("kloʊs", "kloʊz"),
+    "use": ("jus", "juz"),
+    "excuse": ("ɪkskjus", "ɪkskjuz"),
+    "abuse": ("əbjus", "əbjuz"),
+}
+verb_cues = {"to", "will", "would", "could", "should", "shall", "can", "must", "might", "may",
+             "did", "do", "does", "don't", "didn't", "won't", "i", "we", "you", "they", "let's", "please"}
+
+letter_names = {
+    "a": "eɪ", "b": "bi", "c": "si", "d": "di", "e": "i", "f": "ɛf", "g": "ʤi", "h": "eɪʧ",
+    "i": "aɪ", "j": "ʤeɪ", "k": "keɪ", "l": "ɛl", "m": "ɛm", "n": "ɛn", "o": "oʊ", "p": "pi",
+    "q": "kju", "r": "ɑr", "s": "ɛs", "t": "ti", "u": "ju", "v": "vi", "w": "dəbəlju",
+    "x": "ɛks", "y": "waɪ", "z": "zi",
+}
+
+IPA_VOWELS = set("iɪɛeæʊəɑaouɔ")
+VOICELESS = set("ptkfθ")
+SIBILANTS = set("szʃʒʧʤ")
+
+def _plural(base):
+    end = base.rstrip("ˈˌ")[-1:]
+    return base + ("ɪz" if end in SIBILANTS else "s" if end in VOICELESS else "z")
+
+def _past(base):
+    end = base.rstrip("ˈˌ")[-1:]
+    return base + ("ɪd" if end in "td" else "t" if end in VOICELESS | set("sʃʧ") else "d")
+
+# (suffix, how to rebuild, candidate stem endings to restore)
+_suffixes = [
+    ("'s", _plural, [""]),
+    ("ness", lambda b: b + "nəs", ["", "y"]),
+    ("less", lambda b: b + "ləs", [""]),
+    ("ment", lambda b: b + "mənt", [""]),
+    ("ful", lambda b: b + "fəl", [""]),
+    ("ing", lambda b: b + "ɪŋ", ["", "e", "_"]),
+    ("ly", lambda b: b + "li", ["", "le"]),
+    ("ed", _past, ["", "e", "_"]),
+    ("est", lambda b: b + "ɪst", ["", "e"]),
+    ("er", lambda b: b + "ər", ["", "e", "_"]),
+    ("es", _plural, [""]),
+    ("s", _plural, [""]),
+]
+_prefixes = [("un", "ən"), ("re", "ri"), ("dis", "dɪs"), ("be", "bɪ"), ("over", "oʊvər"),
+             ("under", "əndər"), ("non", "nɑn"), ("mis", "mɪs"), ("pre", "pri"), ("out", "aʊt")]
+
+def _morph_guess(word, depth=0):
+    """Pronounce an unknown word from known pieces: suffixes, prefixes, compounds."""
+    if depth > 2:
+        return None
+    for suffix, rebuild, restores in _suffixes:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 2:
+            stem = word[:-len(suffix)]
+            for r in restores:
+                if r == "_":  # doubled final consonant: "clanged" no, "lugged" -> lug
+                    cand = stem[:-1] if len(stem) > 2 and stem[-1] == stem[-2] else None
+                elif r:
+                    cand = stem[:-1] + r if r == "le" or (r == "y" and stem.endswith("i")) else stem + r
+                    if r == "y" and not stem.endswith("i"):
+                        continue
+                else:
+                    cand = stem
+                if cand:
+                    base = lookup_word(cand, depth + 1, guess=False)
+                    if base:
+                        return rebuild(base)
+    for prefix, sound in _prefixes:
+        if word.startswith(prefix) and len(word) - len(prefix) >= 3:
+            base = lookup_word(word[len(prefix):], depth + 1, guess=False)
+            if base:
+                return sound + base
+    for i in range(3, len(word) - 2):
+        left = lookup_word(word[:i], depth + 1, guess=False)
+        if left:
+            right = lookup_word(word[i:], depth + 1, guess=False)
+            if right:
+                return left + right
+    return None
+
+# Ordered spelling -> sound rules for words that aren't in the dictionary at all.
+_letter_rules = [
+    ("tch", "ʧ"), ("sch", "sk"), ("ch", "ʧ"), ("sh", "ʃ"), ("th", "θ"), ("ph", "f"), ("wh", "w"),
+    ("ck", "k"), ("ng", "ŋ"), ("qu", "kw"), ("gh", ""), ("kn", "n"), ("wr", "r"),
+    ("ee", "i"), ("ea", "i"), ("oo", "u"), ("ou", "aʊ"), ("ow", "aʊ"), ("ai", "eɪ"), ("ay", "eɪ"),
+    ("oi", "ɔɪ"), ("oy", "ɔɪ"), ("au", "ɔ"), ("aw", "ɔ"), ("ie", "i"), ("ei", "eɪ"), ("ue", "u"),
+    ("ew", "u"), ("oa", "oʊ"), ("er", "ər"), ("ir", "ər"), ("ur", "ər"), ("ar", "ɑr"), ("or", "ɔr"),
+]
+_long_vowel = {"a": "eɪ", "e": "i", "i": "aɪ", "o": "oʊ", "u": "u", "y": "aɪ"}
+_short_vowel = {"a": "æ", "e": "ɛ", "i": "ɪ", "o": "ɑ", "u": "ə", "y": "ɪ"}
+_consonants = set("bcdfghjklmnpqrstvwxz")
+
+def spell_guess(word):
+    """Rough letter-to-sound guess, using only sounds Grafoni can write (never 'x' or bare 'c')."""
+    w = re.sub(r"[^a-z]", "", word.lower())
+    w = re.sub(r"([bcdfgklmnprstvz])\1", r"\1", w)  # doubled consonants sound single
+    silent_e = len(w) > 2 and w.endswith("e") and w[-2] in _consonants and w[-3] in "aeiouy"
+    if silent_e:
+        w = w[:-1]
+    out = ""
+    i = 0
+    while i < len(w):
+        for spelling, sound in _letter_rules:
+            if w.startswith(spelling, i):
+                out += sound
+                i += len(spelling)
+                break
+        else:
+            c = w[i]
+            nxt = w[i + 1] if i + 1 < len(w) else ""
+            if c in _long_vowel:
+                if c == "y" and i == 0 and nxt in "aeiou" and nxt:
+                    out += "j"
+                elif c == "y" and i == len(w) - 1:
+                    out += "i"
+                elif silent_e and i == len(w) - 2:
+                    out += _long_vowel[c]
+                else:
+                    out += _short_vowel[c]
+            elif c == "c":
+                out += "s" if nxt in ("e", "i", "y") and nxt else "k"
+            elif c == "q":
+                out += "k"
+            elif c == "x":
+                out += "z" if i == 0 else "ks"
+            elif c == "j":
+                out += "ʤ"
+            elif c == "g" and nxt in ("e", "i", "y") and nxt and i == len(w) - 2:
+                out += "ʤ"
+            else:
+                out += c
+            i += 1
+    return out
+
+LOG_UNKNOWN_WORDS = None  # set to a filename to log words that needed a guessed pronunciation
+
+def lookup_word(word, depth=0, guess=True):
+    """IPA for one word (letters, digits and internal apostrophes), or None if guess=False and unknown."""
+    lower = word.lower()
+    if lower in pronunciation_overrides:
+        return pronunciation_overrides[lower]
+    if lower.isdigit():
+        return lower
+    variants = cmu_variants(lower)
+    if variants:
+        # Where the dictionary also records an ɔ form ("bought", "caught"), keep that distinction.
+        open_o = variants[0].replace("ɑ", "ɔ")
+        return open_o if open_o in variants[1:] else variants[0]
+    morph = _morph_guess(lower, depth)
+    if morph or not guess:
+        return morph
+    if LOG_UNKNOWN_WORDS:
+        with open(LOG_UNKNOWN_WORDS, "a") as f:
+            f.write(word + "\n")
+    if 2 <= len(word) <= 5 and word.isupper() and word.isalpha():
+        return "".join(letter_names[c] for c in lower)  # acronym: spell it out
+    return spell_guess(lower)
+
+def cleaner_ipa(in_string):
+    # Separate punctuation that joins two words ("know--know", "ultra-wave").
+    text = re.sub(r'([\w\'])([^\w\'\s]+)([\w\'])', r'\1\2 \3', in_string)
+    tokens = text.split()
+    words = []  # (leading punct, word, trailing punct)
+    for tok in tokens:
+        m = re.match(r"^([^A-Za-z0-9]*)(.*?)([^A-Za-z0-9]*)$", tok)
+        words.append(m.groups())
+    out = []
+    for i, (before, word, after) in enumerate(words):
+        lower = word.lower()
+        prev = words[i - 1][1].lower() if i > 0 and not words[i - 1][2] else ""
+        nxt = words[i + 1][1] if i + 1 < len(words) and not after else ""
+        if not word:
+            sound = ""
+        elif lower == "the":
+            following = lookup_word(nxt) if nxt else ""
+            sound = "ði" if following.lstrip("ˈˌ")[:1] in IPA_VOWELS else "ðə"
+        elif lower in heteronyms:
+            sound = heteronyms[lower][1 if prev in verb_cues else 0]
+        else:
+            sound = lookup_word(word)
+        out.append(before + sound + after)
+    return " ".join(out)
+
 
 def grafoni_spell(string):
-    ipa_string = ipa.convert(string)
+    ipa_string = cleaner_ipa(string)
     ipa_string = keep_some_y_w(ipa_string)
     out = []
     for letter in ipa_string:
@@ -442,24 +689,27 @@ def grafoni_spell(string):
             out += [letter]
     return out
 
+# Anything that isn't a letter sound ends a word, so its neighbours get their start/end forms.
+BOUNDARY = {" ", ",", ".", "-", ";", ":", "?", "!", '"', "'", "(", ")"}
+
 def process_ends(in_grafoni):
     in_grafoni = [" "] + in_grafoni + [" "]
     out_grafoni = []
     for i in range(len(in_grafoni)-2):
         # beginning
         l, m, r = in_grafoni[i:i+3]
-        if l in [" ",",",".","-",";",":"] and (m in ["k","g","t","d","p","b","h","x"]):
+        if l in BOUNDARY and (m in ["k","g","t","d","p","b","h","x"]):
             m += "-beg"
-        if l in [" ",",",".","-",";",":"] and m in ["th","dh"] and not r in ["uv1","uv2","uv3","mv1","mv2","mv3"]:
+        if l in BOUNDARY and m in ["th","dh"] and not r in ["uv1","uv2","uv3","mv1","mv2","mv3"]:
             m += "-beg"
-        if l in [" ",",",".","-",";",":"] and m in ["f","v"] and not r in ["uv1","uv2","uv3"]:
+        if l in BOUNDARY and m in ["f","v"] and not r in ["uv1","uv2","uv3"]:
             m += "-beg"
         # ending
-        if r in [" ",",",".","-",";",":"] and m in ["p","b","h","x","th","dh","f","v"]:
+        if r in BOUNDARY and m in ["p","b","h","x","th","dh","f","v"]:
             m += "-end"
-        if r in [" ",",",".","-",";",":"] and m in ["t","d"] and not l in ["lv1","lv2","lv3","mv1","mv2","mv3"]:
+        if r in BOUNDARY and m in ["t","d"] and not l in ["lv1","lv2","lv3","mv1","mv2","mv3"]:
             m += "-end"
-        if r in [" ",",",".","-",";",":"] and m in ["k","g"] and not l in ["lv1","lv2","lv3"]:
+        if r in BOUNDARY and m in ["k","g"] and not l in ["lv1","lv2","lv3"]:
             m += "-end"
         out_grafoni.append(m)
     return out_grafoni
@@ -558,13 +808,11 @@ def to_svg(in_string,wrap = 100,shear_val=-1/sqrt(3),line_space=20,v_scale=0.5):
     last_char = " "
     for l in chars:
         if l in letter_forms:
-            l_kern,r_kern = kerning[(last(last_char),first(l))]
-            n_val = nudge_kern[(last(last_char),first(l))]
+            l_kern,r_kern,n_val = pair_kerning(last_char,l)
             last_char = l
             out = concat(v_nudge(r_extend(out,l_kern),n_val),l_extend(letter_forms[l],r_kern))
         elif l in ligatures:
-            l_kern,r_kern = kerning[(last(last_char),first(l))]
-            n_val = nudge_kern[(last(last_char),first(l))]
+            l_kern,r_kern,n_val = pair_kerning(last_char,l)
             last_char = l
             out = concat(v_nudge(r_extend(out,l_kern),n_val),l_extend(ligatures[l],r_kern))
         else:
