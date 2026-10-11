@@ -576,6 +576,7 @@ def _morph_guess(word, depth=0):
 
 # Ordered spelling -> sound rules for words that aren't in the dictionary at all.
 _letter_rules = [
+    ("tion", "ʃən"), ("sion", "ʒən"), ("ious", "iəs"), ("ous", "əs"), ("ian", "iən"),
     ("tch", "ʧ"), ("sch", "sk"), ("ch", "ʧ"), ("sh", "ʃ"), ("th", "θ"), ("ph", "f"), ("wh", "w"),
     ("ck", "k"), ("ng", "ŋ"), ("qu", "kw"), ("gh", ""), ("kn", "n"), ("wr", "r"),
     ("ee", "i"), ("ea", "i"), ("oo", "u"), ("ou", "aʊ"), ("ow", "aʊ"), ("ai", "eɪ"), ("ay", "eɪ"),
@@ -590,9 +591,26 @@ def spell_guess(word):
     """Rough letter-to-sound guess, using only sounds Grafoni can write (never 'x' or bare 'c')."""
     w = re.sub(r"[^a-z]", "", word.lower())
     w = re.sub(r"([bcdfgklmnprstvz])\1", r"\1", w)  # doubled consonants sound single
-    silent_e = len(w) > 2 and w.endswith("e") and w[-2] in _consonants and w[-3] in "aeiouy"
+    if w.startswith("chr"):
+        w = "k" + w[2:]
+    ending = ""
+    if len(w) > 3 and re.search(r"[^aeiou]le$", w):
+        w, ending = w[:-2], "əl"
+    elif len(w) > 3 and w.endswith("ae"):
+        w, ending = w[:-2], "i"
+    elif len(w) > 3 and re.search(r"[aeiou][^aeiou]ia$", w):
+        w, ending = w[:-2], "iə"
+    elif len(w) > 3 and re.search(r"[^aeiou]al$", w):
+        w, ending = w[:-2], "əl"
+    silent_e = len(w) > 2 and w.endswith("e") and w[-2] in _consonants
+    long_e = silent_e and w[-3] in "aeiouy"
     if silent_e:
         w = w[:-1]
+        if w.endswith("c"):    # "-nce" keeps its soft c
+            w = w[:-1] + "s"
+        elif w.endswith("g"):  # "-nge"
+            w = w[:-1] + "j"
+    w = re.sub(r"sc(?=[eiy])", "s", w)
     out = ""
     i = 0
     while i < len(w):
@@ -609,7 +627,7 @@ def spell_guess(word):
                     out += "j"
                 elif c == "y" and i == len(w) - 1:
                     out += "i"
-                elif silent_e and i == len(w) - 2:
+                elif long_e and i == len(w) - 2:
                     out += _long_vowel[c]
                 else:
                     out += _short_vowel[c]
@@ -626,7 +644,15 @@ def spell_guess(word):
             else:
                 out += c
             i += 1
-    return out
+    return out + ending
+
+def roman_to_int(numeral):
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    total = 0
+    for i, ch in enumerate(numeral):
+        v = values[ch]
+        total += -v if i + 1 < len(numeral) and values[numeral[i + 1]] > v else v
+    return total
 
 LOG_UNKNOWN_WORDS = None  # set to a filename to log words that needed a guessed pronunciation
 
@@ -648,8 +674,10 @@ def lookup_word(word, depth=0, guess=True):
     if LOG_UNKNOWN_WORDS:
         with open(LOG_UNKNOWN_WORDS, "a") as f:
             f.write(word + "\n")
-    if 2 <= len(word) <= 5 and word.isupper() and word.isalpha():
-        return "".join(letter_names[c] for c in lower)  # acronym: spell it out
+    if word.isupper() and re.fullmatch(r"M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})", word):
+        return str(roman_to_int(word))  # written with Grafoni digits
+    if word.isalpha() and ((2 <= len(word) <= 5 and word.isupper()) or not re.search(r"[aeiouy]", lower)):
+        return "".join(letter_names[c] for c in lower)  # acronym or abbreviation: spell it out
     return spell_guess(lower)
 
 def cleaner_ipa(in_string):
