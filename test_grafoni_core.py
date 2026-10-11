@@ -58,3 +58,18 @@ def test_th_flows_into_d():
 def test_ligature_aware_kerning():
     assert grafoni.pair_kerning("th_uv1", "ng")[0] > 0
     assert grafoni.pair_kerning("s_uv1", "ng") == grafoni.pair_kerning("uv1", "ng")
+
+
+@pytest.mark.parametrize("word, expected", [
+    ("XIV", "14"), ("VIII", "8"),          # Roman numerals -> Grafoni digits
+    ("Br", "biɑr"),                         # no vowels: abbreviation, spelled out
+    ("complacence", "kɑmplæsɛns"),          # soft c before silent e
+    ("declination", "dɛklɪnæʃən"),
+    ("dirigible", "dərɪgɪbəl"),
+])
+def test_more_unknown_words(word, expected):
+    assert grafoni.lookup_word(word) == expected
+
+
+def test_roman_numeral_renders_as_digits():
+    assert grafoni.to_list("XIV") == ["1", "4"]
