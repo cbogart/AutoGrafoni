@@ -177,13 +177,22 @@ class GrafoniConverter:
     # Must match PDFGenerator / grafoni_utils SVG emission.
     BASE_SVG_DIVISOR = 2.5
     SVG_RENDER_SCALE = 4
-    SVG_PADDING = 10
+    SVG_PADDING = grafoni_utils.PADDING
+    SVG_FRAME = grafoni_utils.FRAME_ABOVE + grafoni_utils.FRAME_BELOW
     V_SCALE = 0.5
     LINE_SPACE = 20
     # PDF margins matching PDFGenerator (non-title top chrome).
     PDF_TOP_MARGIN = 50
     PDF_BOTTOM_MARGIN = 50
     PDF_SIDE_MARGIN = 50
+    # SVG-unit slack below a full page. Blocks are framed to a fixed height
+    # (grafoni_utils.FRAME_*), so this only absorbs rounding.
+    PAGE_BBOX_SLACK_SVG = 8
+    # Chapter headings: drawn this much larger, with a heavier pen.
+    HEADING_SIZE = 1.6
+    HEADING_STROKE = 0.55
+    # First-line paragraph indent, stroke units.
+    PARAGRAPH_INDENT = 12
     
     def __init__(self, scale=1.0):
         if scale <= 0:
@@ -194,11 +203,8 @@ class GrafoniConverter:
         page_w, page_h = A4
         top = self.PDF_TOP_MARGIN * scale
         content_height_pt = page_h - top - self.PDF_BOTTOM_MARGIN
-        # SVG-unit slack so glyph vertical bbox does not push a "full"
-        # page chunk past the printable PDF height (~30+ observed at scale 2).
-        page_bbox_slack_svg = 56
         self.page_height = (
-            content_height_pt / scale * self.BASE_SVG_DIVISOR - page_bbox_slack_svg
+            content_height_pt / scale * self.BASE_SVG_DIVISOR - self.PAGE_BBOX_SLACK_SVG
         )
         
         # Wrap so that SVG width after render fits the PDF content width.
@@ -212,19 +218,19 @@ class GrafoniConverter:
         self.wrap_width = min(self.BASE_WRAP_WIDTH / scale, max_stroke_wrap)
         
         # Minimum remaining SVG height worth filling (~one Grafoni line).
-        self.min_remaining_height = self._stroke_y_to_svg(self.LINE_SPACE)
+        self.min_remaining_height = self._stroke_y_to_svg(0) + self.paragraph_spacing
     
     @classmethod
     def _stroke_y_to_svg(cls, stroke_y):
         """Convert pre-v_scale stroke Y to SVG pixel height (see svgStrokes)."""
-        return (cls.SVG_RENDER_SCALE * cls.V_SCALE * stroke_y
+        return (cls.SVG_RENDER_SCALE * cls.V_SCALE * (stroke_y + cls.SVG_FRAME)
                 + 2 * cls.SVG_RENDER_SCALE * cls.SVG_PADDING)
     
     @classmethod
     def _svg_to_stroke_y(cls, svg_height):
         """Convert SVG pixel budget to stroke-Y budget for to_svg_no_display."""
         usable = svg_height - 2 * cls.SVG_RENDER_SCALE * cls.SVG_PADDING
-        return max(cls.LINE_SPACE, usable / (cls.SVG_RENDER_SCALE * cls.V_SCALE))
+        return max(0, usable / (cls.SVG_RENDER_SCALE * cls.V_SCALE) - cls.SVG_FRAME)
     
     def convert_text(self, text, max_pages=1000):
         """Convert text to Grafoni pages with paragraph-based processing"""
@@ -242,6 +248,7 @@ class GrafoniConverter:
         current_page = []
         current_page_height = 0
         page_count = 0
+        previous_was_chapter = False
         
         try:
             for paragraph in paragraphs:
@@ -262,42 +269,54 @@ class GrafoniConverter:
                     current_page_height = 0
                     remaining_height = self.page_height
                 
+                heading = self._heading(paragraph, previous_was_chapter)
+                previous_was_chapter = heading is not None and heading.split()[0] in ('Chapter', 'Part', 'Book')
+                size = self.HEADING_SIZE if heading else 1.0
+                # Headings start on a fresh page unless they follow another heading.
+                if heading and current_page and not current_page[-1].get('heading'):
+                    grafoni_pages.append(current_page)
+                    page_count += 1
+                    if page_count >= max_pages:
+                        break
+                    current_page = []
+                    current_page_height = 0
+                    remaining_height = self.page_height
+
                 # to_svg_no_display measures Y in stroke units; convert budget.
+                # Headings are drawn `size` times larger, so give them proportionally less room.
                 svg_list = grafoni_utils.to_svg_no_display(
-                    paragraph, 
-                    wrap=self.wrap_width, 
-                    page_height=self._svg_to_stroke_y(self.page_height),
-                    remaining_page_height=self._svg_to_stroke_y(remaining_height),
+                    heading or paragraph,
+                    wrap=self.wrap_width / size,
+                    page_height=self._svg_to_stroke_y(self.page_height / size),
+                    remaining_page_height=self._svg_to_stroke_y(
+                        (remaining_height - self.paragraph_spacing) / size),
                     line_space=self.LINE_SPACE,
                     v_scale=self.V_SCALE,
+                    indent=0 if heading else self.PARAGRAPH_INDENT,
+                    stroke_width=self.HEADING_STROKE if heading else 1.0 / 3,
                 )
                 
                 # Add SVGs to current page or start new page
                 for svg in svg_list:
-                    # Check if this SVG fits on current page
-                    print(f"Adding {paragraph[:50]} to current page")
-                    if current_page_height + svg.height + self.paragraph_spacing <= self.page_height:
-                        # Add to current page
-                        current_page.append({
-                            'text': paragraph[:50] + "..." if len(paragraph) > 50 else paragraph,
-                            'svg': svg
-                        })
-                        current_page_height += svg.height + self.paragraph_spacing
+                    item = {
+                        'text': paragraph[:50] + "..." if len(paragraph) > 50 else paragraph,
+                        'svg': svg,
+                        'size': size,
+                        'heading': bool(heading),
+                    }
+                    height = svg.height * size + self.paragraph_spacing
+                    if current_page_height + height <= self.page_height:
+                        current_page.append(item)
+                        current_page_height += height
                     else:
-                        print(f"Starting new page with {paragraph[:50]}")
                         # Start new page
                         if current_page:
                             grafoni_pages.append(current_page)
                             page_count += 1
                             if page_count >= max_pages:
                                 break
-                        
-                        # Start fresh page with this SVG
-                        current_page = [{
-                            'text': paragraph[:50] + "..." if len(paragraph) > 50 else paragraph,
-                            'svg': svg
-                        }]
-                        current_page_height = svg.height + self.paragraph_spacing
+                        current_page = [item]
+                        current_page_height = height
                 
         except Exception as e:
             print(f"Error converting text: {e}")
@@ -311,22 +330,58 @@ class GrafoniConverter:
     
     def _clean_text(self, text):
         """Clean and prepare text for conversion"""
-        # Remove Project Gutenberg header/footer more carefully
-        text = re.sub(r'\*\*\* START OF THE PROJECT GUTENBERG EBOOK .*? \*\*\*', '', text, flags=re.DOTALL)
-        text = re.sub(r'\*\*\* START OF THIS PROJECT GUTENBERG EBOOK .*? \*\*\*', '', text, flags=re.DOTALL)
-        text = re.sub(r'\*\*\* END OF THE PROJECT GUTENBERG EBOOK .*? \*\*\*', '', text, flags=re.DOTALL)
-        
-        # Remove extra whitespace
-        text = re.sub(r'[ \t]+', ' ', text)
-        
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+        # Keep only the book: drop the Project Gutenberg header and the license after it.
+        start = re.search(r'^\*\*\* ?START OF (THE|THIS) PROJECT GUTENBERG.*$', text, flags=re.MULTILINE)
+        if start:
+            text = text[start.end():]
+        end = re.search(r'^(\*\*\* ?END OF (THE|THIS) PROJECT GUTENBERG|End of (the )?Project Gutenberg)',
+                        text, flags=re.MULTILINE | re.IGNORECASE)
+        if end:
+            text = text[:end.start()]
+        text = re.sub(r'\A\s*Produced by.*?\n\s*\n', '', text, flags=re.DOTALL)
+
+        # Bracketed editorial blocks: [Illustration: ...], [Transcriber's note: ...]
+        text = re.sub(r'\[(Illustration|Transcriber)[^\]]*\]', '', text, flags=re.IGNORECASE)
+
+        # Typographic punctuation to the plain forms Grafoni draws
+        text = (text.replace('\u2018', "'").replace('\u2019', "'")
+                    .replace('\u201c', '"').replace('\u201d', '"')
+                    .replace('\u2014', '--').replace('\u2013', '-'))
+
         # Keep only basic ASCII characters that Grafoni supports
         text = re.sub(r'[^a-zA-Z0-9\s.,!?;:\'\"()-]', ' ', text)
-        
-        # Clean up extra spaces
+
+        # Collapse spaces; normalise paragraph breaks to exactly one blank line
         text = re.sub(r'[ \t]+', ' ', text)
-        
+        text = re.sub(r' *\n *', '\n', text)
+        text = re.sub(r'\n{2,}', '\n\n', text)
+
         return text.strip()
-    
+
+    @staticmethod
+    def _roman_to_int(numeral):
+        values = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+        total = 0
+        for i, ch in enumerate(numeral):
+            v = values[ch]
+            total += -v if i + 1 < len(numeral) and values[numeral[i + 1]] > v else v
+        return total
+
+    def _heading(self, paragraph, previous_was_chapter):
+        """Return heading text if this paragraph is a chapter heading (or its subtitle), else None."""
+        m = re.fullmatch(r'(CHAPTER|Chapter|PART|Part|BOOK|Book)\s+([IVXLCDM]+|\d+)\.?', paragraph)
+        if m:
+            number = m.group(2)
+            if not number.isdigit():
+                number = str(self._roman_to_int(number))
+            return f"{m.group(1).capitalize()} {number}"
+        if previous_was_chapter and len(paragraph) < 60 and '\n' not in paragraph \
+                and not paragraph.rstrip().endswith(('.', '"', '?', '!')):
+            return paragraph
+        return None
+
     def _split_into_sentences(self, text):
         """Split text into sentences"""
         # Simple sentence splitting
@@ -396,8 +451,9 @@ class PDFGenerator:
                     
                     # Scale display size; wrap width was adjusted inversely so
                     # full lines still fit the page width.
-                    svg_width = item['svg'].width / self.BASE_SVG_DIVISOR * s
-                    svg_height = item['svg'].height / self.BASE_SVG_DIVISOR * s
+                    size = item.get('size', 1.0)
+                    svg_width = item['svg'].width / self.BASE_SVG_DIVISOR * s * size
+                    svg_height = item['svg'].height / self.BASE_SVG_DIVISOR * s * size
                     
                     # Check if we need a new page
                     if y_position - svg_height < 50:

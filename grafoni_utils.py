@@ -22,8 +22,7 @@ def _append_glyph(out, last_char, glyph):
         print("Unsupported Character: " + glyph)
         return out, last_char
 
-    l_kern, r_kern = grafoni.kerning[(grafoni.last(last_char), grafoni.first(glyph))]
-    n_val = grafoni.nudge_kern[(grafoni.last(last_char), grafoni.first(glyph))]
+    l_kern, r_kern, n_val = grafoni.pair_kerning(last_char, glyph)
     new_out = grafoni.concat(
         grafoni.v_nudge(grafoni.r_extend(out, l_kern), n_val),
         grafoni.l_extend(forms[glyph], r_kern),
@@ -47,15 +46,27 @@ def _newline_move(out, line_space, shear_val, v_scale):
     return out, new_y
 
 
-def _emit_page(svg_list, strokes, v_scale, shear_val):
+# Vertical room reserved above the first baseline and below the last one, in
+# stroke units. Framing every block the same way (instead of by its ink) keeps
+# the gap between paragraphs constant whether or not they have tall letters.
+FRAME_ABOVE = 10
+FRAME_BELOW = 10
+# SVG padding around the frame, in stroke units (only needs to cover the pen width).
+PADDING = 2
+
+
+def _emit_page(svg_list, strokes, v_scale, shear_val, stroke_width=1.0 / 3):
     if not strokes:
         return
-    page_strokes = grafoni.shear(grafoni.scale(strokes, 1, v_scale), by=shear_val)
-    svg_list.append(grafoni.svgStrokes(page_strokes, scale=4, padding=10, stroke_width=1.0 / 3))
+    last_x, last_y = strokes[-1][-2:]
+    framed = [('move', 0, -FRAME_ABOVE)] + strokes + [('move', last_x, last_y + FRAME_BELOW)]
+    page_strokes = grafoni.shear(grafoni.scale(framed, 1, v_scale), by=shear_val)
+    svg_list.append(grafoni.svgStrokes(page_strokes, scale=4, padding=PADDING, stroke_width=stroke_width))
 
 
 def to_svg_no_display(in_string, wrap=800, page_height=1000, remaining_page_height=None,
-                      shear_val=-1 / sqrt(3), line_space=20, v_scale=0.5):
+                      shear_val=-1 / sqrt(3), line_space=20, v_scale=0.5,
+                      indent=0, stroke_width=1.0 / 3):
     """
     Convert text to Grafoni SVG without displaying it.
     If remaining_page_height is provided, will break into multiple SVGs if needed.
@@ -63,14 +74,15 @@ def to_svg_no_display(in_string, wrap=800, page_height=1000, remaining_page_heig
 
     Wrapping is word-aware: an overflowing word is moved to the next line when
     possible; words wider than wrap are broken at glyph boundaries.
+    indent moves the first line right (stroke units).
     """
     chars = in_string
     if isinstance(chars, str):
         chars = grafoni.to_list(in_string)
 
-    out = [('move', 0, 0)]
+    out = [('move', indent, 0)]
     last_char = " "
-    current_page_strokes = [('move', 0, 0)]
+    current_page_strokes = [('move', indent, 0)]
     current_y = 0
     svg_list = []
 
@@ -79,7 +91,7 @@ def to_svg_no_display(in_string, wrap=800, page_height=1000, remaining_page_heig
 
     # Glyphs of the word currently being placed, and stroke state before it.
     word_glyphs = []
-    out_before_word = [('move', 0, 0)]
+    out_before_word = [('move', indent, 0)]
     last_char_before_word = " "
     line_has_content = False
 
@@ -102,7 +114,7 @@ def to_svg_no_display(in_string, wrap=800, page_height=1000, remaining_page_heig
             current_y = new_y
             return False
 
-        _emit_page(svg_list, current_page_strokes, v_scale, shear_val)
+        _emit_page(svg_list, current_page_strokes, v_scale, shear_val, stroke_width)
         out = [('move', 0, 0)]
         last_char = " "
         current_page_strokes = [('move', 0, 0)]
@@ -216,7 +228,7 @@ def to_svg_no_display(in_string, wrap=800, page_height=1000, remaining_page_heig
             place_with_midword_breaks(word_glyphs)
 
     if current_page_strokes:
-        _emit_page(svg_list, current_page_strokes, v_scale, shear_val)
+        _emit_page(svg_list, current_page_strokes, v_scale, shear_val, stroke_width)
 
     return svg_list
 
