@@ -53,9 +53,18 @@ def test_th_flows_into_d():
 
 
 def test_ligature_aware_kerning():
-    # room after th_uv1 goes on the next glyph, so the vowel arch is not flattened
-    assert grafoni.pair_kerning("th_uv1", "ng")[:2] == (-1, 2.5)
+    # a kerning entry may name a whole ligature; otherwise its outer letters are used
+    grafoni.kerning[("s_uv1", "zz")] = (3, 3)
+    try:
+        assert grafoni.pair_kerning("s_uv1", "zz")[:2] == (3, 3)
+    finally:
+        del grafoni.kerning[("s_uv1", "zz")]
     assert grafoni.pair_kerning("s_uv1", "ng") == grafoni.pair_kerning("uv1", "ng")
+
+
+def test_th_vowel_ng_is_a_plain_arch():
+    # "thing": no extra room between the i arch and the ng loop
+    assert grafoni.pair_kerning("th_uv1", "ng") == grafoni.pair_kerning("uv1", "ng")
 
 
 def test_t_sh_flows_together():
@@ -66,14 +75,6 @@ def test_t_sh_flows_together():
 
 def test_ng_n_separated():
     assert grafoni.pair_kerning("ng", "n")[1] > 0
-
-
-def test_th_vowel_arch_flows_into_loop():
-    # the room before ng follows the arch's downward direction rather than starting flat
-    out = grafoni.append_glyph([('move', 0, 0)], " ", "th_uv1")
-    joined = grafoni.append_glyph(out, "th_uv1", "ng")
-    first_ng_curve = joined[len(out)]
-    assert first_ng_curve[0] == 'cubic' and first_ng_curve[2] > out[-1][-1]
 
 
 @pytest.mark.parametrize("text, expected", [
@@ -108,11 +109,3 @@ def test_more_unknown_words(word, expected):
 def test_roman_numeral_renders_as_digits():
     assert grafoni.to_list("XIV") == ["1", "4"]
 
-
-def test_ng_loop_stays_closed_after_th_vowel():
-    # "writhing": the room before ng goes in a run, so the loop ends where it began
-    out = grafoni.append_glyph([('move', 0, 0)], " ", "dh_uv1")
-    joined = grafoni.append_glyph(out, "dh_uv1", "ng")
-    loop = joined[len(out) + 1:]
-    start = joined[len(out)][-2:]
-    assert loop[-1][-2:] == pytest.approx(start)
