@@ -437,8 +437,11 @@ class PDFGenerator:
             
             # Add title on first page
             if page_num == 0:
-                c.setFont("Helvetica-Bold", title_font)
-                c.drawString(self.margin, self.page_height - top_offset, f"{book_title} - Grafoni Script")
+                title = f"{book_title} - Grafoni Script"
+                # Shrink a long title to fit between the margins.
+                fit = (self.page_width - 2 * self.margin) / pdfmetrics.stringWidth(title, "Helvetica-Bold", 1)
+                c.setFont("Helvetica-Bold", min(title_font, fit))
+                c.drawString(self.margin, self.page_height - top_offset, title)
                 c.setFont("Helvetica", subtitle_font)
                 c.drawString(self.margin, self.page_height - subtitle_offset, "Converted from Project Gutenberg")
             
