@@ -55,7 +55,7 @@ CASES = [
     ]),
     ("Joins and spacing", [
         ("withdrawn withdrew bathed", "th/dh rise straight into d, no flat gap"),
-        ("things nothing nothingness writhing", "i arch flows into ng; ng loop closed, no tail; short run between ng and n"),
+        ("thing nothing writhing nothingness", "clean i arch straight into ng; short run only between ng and n"),
         ("watched church H", "t+sh flows together with no hitch"),
         ("savagely strangely freshly", "d flows into zh; narrow l loop clears the d"),
         ("transmitter endured", "s and m don't collide; d and u visible"),
