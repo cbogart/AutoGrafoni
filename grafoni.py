@@ -323,11 +323,8 @@ kerning[("zh","m")] = (-1,1)
 kerning[("m","sh")] = (1,-1)
 kerning[("m","zh")] = (1,-1)
 
-# a little room before the tall sh/zh+l loop, which otherwise sits on the t/d stem
-# ("savagely", "strangely"); plain t+sh and d+zh keep flowing together.
-for _a in ["t","d"]:
-    for _b in ["sh_l","zh_l"]:
-        kerning[(_a,_b)] = (1,-1)
+# ng closes its loop back where it started, so a following n needs a short run to keep the loops apart ("nothingness")
+kerning[("ng","n")] = (-1,3)
 # s/z followed by m without the s_m ligature (e.g. after n_s in "transmitter")
 kerning[("s","m")] = (1,-1)
 kerning[("z","m")] = (1,-1)
@@ -388,8 +385,9 @@ ligatures = {
     "z_ng": [('quadratic', 0, -8, 1, -8), ('quadratic', 2, -8, 2, 0), ('cubic', 2, 2, 2, 8, 1, 8), ('cubic', 0, 8, 0, 2, 2, 0)],
     "sh_r": [('quadratic', 0, 4, 1, 4), ('quadratic', 2, 4, 2, 0), ('cubic', 2, -2, 2, -4, 1, -4), ('cubic', 0, -4, 0, -2, 2, 0)],
     "zh_r": [('quadratic', 0, 8, 1, 8), ('quadratic', 2, 8, 2, 0), ('cubic', 2, -2, 2, -4, 1, -4), ('cubic', 0, -4, 0, -2, 2, 0)],
-    "sh_l": [('quadratic', 0, 4, 1, 4), ('quadratic', 2, 4, 2, 0), ('cubic', 2, -2, 2, -8, 1, -8), ('cubic', 0, -8, 0, -2, 2, 0)],
-    "zh_l": [('quadratic', 0, 8, 1, 8), ('quadratic', 2, 8, 2, 0), ('cubic', 2, -2, 2, -8, 1, -8), ('cubic', 0, -8, 0, -2, 2, 0)],      
+    # the l loop is kept narrow so it clears a t/d stem just before the sh/zh ("savagely", "strangely")
+    "sh_l": [('quadratic', 0, 4, 1, 4), ('quadratic', 2, 4, 2, 0), ('cubic', 2, -2, 2, -8, 1.6, -8), ('cubic', 1.2, -8, 1.2, -2, 2, 0)],
+    "zh_l": [('quadratic', 0, 8, 1, 8), ('quadratic', 2, 8, 2, 0), ('cubic', 2, -2, 2, -8, 1.6, -8), ('cubic', 1.2, -8, 1.2, -2, 2, 0)],      
 
     "th_uv1": [('line',0,4),('line',0,2),('cubic',0,0,1*vowel_scale,-1*vowel_scale,2*vowel_scale,0)],
     "th_uv2": [('line',0,4),('line',0,2),('cubic',0,0,2*vowel_scale,-2*vowel_scale,4*vowel_scale,0)],
@@ -640,6 +638,12 @@ def spell_guess(word):
             i += 1
     return out + ending
 
+# Latin capitals travel through the IPA string as private-use characters, one per letter.
+LATIN_BASE = 0xE000
+
+def latin(word):
+    return "".join(chr(LATIN_BASE + ord(c) - ord("A")) for c in word.upper())
+
 def roman_to_int(numeral):
     values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
     total = 0
@@ -658,6 +662,15 @@ def lookup_word(word, depth=0, guess=True):
     if lower.isdigit():
         return lower
     variants = cmu_variants(lower)
+    if word.isupper() and len(word) >= 2 and word.isalpha():
+        spelled = "".join(letter_names[c] for c in lower)
+        if variants and variants[0].replace("ˈ", "").replace("ˌ", "") == spelled:
+            return latin(word)  # said letter by letter (DNA, FBI): write the letters
+        if not variants:
+            if re.fullmatch(r"M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})", word):
+                return str(roman_to_int(word))  # written with Grafoni digits
+            if len(word) <= 5:
+                return latin(word)  # unknown acronym
     if variants:
         # Where the dictionary also records an ɔ form ("bought", "caught"), keep that distinction.
         open_o = variants[0].replace("ɑ", "ɔ")
@@ -668,10 +681,8 @@ def lookup_word(word, depth=0, guess=True):
     if LOG_UNKNOWN_WORDS:
         with open(LOG_UNKNOWN_WORDS, "a") as f:
             f.write(word + "\n")
-    if word.isupper() and re.fullmatch(r"M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})", word):
-        return str(roman_to_int(word))  # written with Grafoni digits
-    if word.isalpha() and ((2 <= len(word) <= 5 and word.isupper()) or not re.search(r"[aeiouy]", lower)):
-        return "".join(letter_names[c] for c in lower)  # acronym or abbreviation: spell it out
+    if word.isalpha() and not re.search(r"[aeiouy]", lower):
+        return latin(word)  # abbreviation with no vowels (Br, Dx): write the letters
     return spell_guess(lower)
 
 def cleaner_ipa(in_string):
@@ -696,6 +707,8 @@ def grafoni_spell(string):
     for letter in ipa_string:
         if letter in convert_dict:
             out += convert_dict[letter]
+        elif LATIN_BASE <= ord(letter) < LATIN_BASE + 26:
+            out += ["L-" + chr(ord(letter) - LATIN_BASE + ord("A"))]
         else:
             out += [letter]
     return out
@@ -818,14 +831,9 @@ def to_svg(in_string,wrap = 100,shear_val=-1/sqrt(3),line_space=20,v_scale=0.5):
     out = [('move',0,0)]
     last_char = " "
     for l in chars:
-        if l in letter_forms:
-            l_kern,r_kern,n_val = pair_kerning(last_char,l)
+        if l in letter_forms or l in ligatures:
+            out = append_glyph(out,last_char,l)
             last_char = l
-            out = concat(v_nudge(r_extend(out,l_kern),n_val),l_extend(letter_forms[l],r_kern))
-        elif l in ligatures:
-            l_kern,r_kern,n_val = pair_kerning(last_char,l)
-            last_char = l
-            out = concat(v_nudge(r_extend(out,l_kern),n_val),l_extend(ligatures[l],r_kern))
         else:
             print("Unsupported Character: " + l)
         if last_char == " "  and out[-1][-2] + shear_val*v_scale*out[-1][-1] > wrap:
@@ -919,3 +927,75 @@ def shear(strokes,by=-1):
         if s[0] == 'cubic':
             out.append(('cubic',s[1]+by*s[2],s[2],s[3]+by*s[4],s[4],s[5]+by*s[6],s[6]))
     return out
+
+# Latin capitals for acronyms, in the same pen and slant as the Grafoni letters.
+# Cap height matches the tall letters (8 units above the line); each starts and ends with the pen up.
+_latin_caps = {
+    "A": ([('move',0,0),('line',2,-8),('line',4,0),('move',1,-3),('line',3,-3)], 4),
+    "B": ([('move',0,0),('line',0,-8),('line',2.5,-8),('quadratic',4,-8,4,-6),('quadratic',4,-4,2.5,-4),('line',0,-4),('move',2.5,-4),('quadratic',4.5,-4,4.5,-2),('quadratic',4.5,0,2.5,0),('line',0,0)], 4.5),
+    "C": ([('move',4,-7),('cubic',3,-8.5,0,-8.5,0,-4),('cubic',0,0.5,3,0.5,4,-1)], 4),
+    "D": ([('move',0,0),('line',0,-8),('line',1.5,-8),('cubic',5,-8,5,0,1.5,0),('line',0,0)], 4.5),
+    "E": ([('move',4,-8),('line',0,-8),('line',0,0),('line',4,0),('move',0,-4),('line',3,-4)], 4),
+    "F": ([('move',4,-8),('line',0,-8),('line',0,0),('move',0,-4),('line',3,-4)], 4),
+    "G": ([('move',4,-7),('cubic',3,-8.5,0,-8.5,0,-4),('cubic',0,0.5,4,0.5,4,-2),('line',4,-3.5),('line',2.5,-3.5)], 4),
+    "H": ([('move',0,-8),('line',0,0),('move',4,-8),('line',4,0),('move',0,-4),('line',4,-4)], 4),
+    "I": ([('move',0,-8),('line',0,0)], 0),
+    "J": ([('move',3,-8),('line',3,-2),('quadratic',3,0,1.5,0),('quadratic',0,0,0,-2)], 3),
+    "K": ([('move',0,-8),('line',0,0),('move',4,-8),('line',0,-3),('move',1.3,-4.5),('line',4,0)], 4),
+    "L": ([('move',0,-8),('line',0,0),('line',3.5,0)], 3.5),
+    "M": ([('move',0,0),('line',0,-8),('line',2.5,-3),('line',5,-8),('line',5,0)], 5),
+    "N": ([('move',0,0),('line',0,-8),('line',4,0),('line',4,-8)], 4),
+    "O": ([('move',2.25,-8),('cubic',-0.75,-8,-0.75,0,2.25,0),('cubic',5.25,0,5.25,-8,2.25,-8)], 4.5),
+    "P": ([('move',0,0),('line',0,-8),('line',2.5,-8),('quadratic',4.5,-8,4.5,-5.75),('quadratic',4.5,-3.5,2.5,-3.5),('line',0,-3.5)], 4.5),
+    "Q": ([('move',2.25,-8),('cubic',-0.75,-8,-0.75,0,2.25,0),('cubic',5.25,0,5.25,-8,2.25,-8),('move',2.75,-2),('line',4.5,0.5)], 4.5),
+    "R": ([('move',0,0),('line',0,-8),('line',2.5,-8),('quadratic',4.5,-8,4.5,-5.75),('quadratic',4.5,-3.5,2.5,-3.5),('line',0,-3.5),('move',2,-3.5),('line',4.5,0)], 4.5),
+    "S": ([('move',4,-7),('cubic',3,-8.5,0,-8.5,0,-6),('cubic',0,-4,4,-4.5,4,-2),('cubic',4,0.5,1,0.5,0,-1)], 4),
+    "T": ([('move',0,-8),('line',4,-8),('move',2,-8),('line',2,0)], 4),
+    "U": ([('move',0,-8),('line',0,-2.5),('cubic',0,0.5,4,0.5,4,-2.5),('line',4,-8)], 4),
+    "V": ([('move',0,-8),('line',2,0),('line',4,-8)], 4),
+    "W": ([('move',0,-8),('line',1.5,0),('line',3,-6),('line',4.5,0),('line',6,-8)], 6),
+    "X": ([('move',0,-8),('line',4,0),('move',0,0),('line',4,-8)], 4),
+    "Y": ([('move',0,-8),('line',2,-4),('line',4,-8),('move',2,-4),('line',2,0)], 4),
+    "Z": ([('move',0,-8),('line',4,-8),('line',0,0),('line',4,0)], 4),
+}
+for _ch, (_strokes, _width) in _latin_caps.items():
+    letter_forms["L-" + _ch] = translate(_strokes, 1, 0) + [('move', _width + 2.5, 0)]
+    BOUNDARY.add("L-" + _ch)
+
+# Joins where the room added by kerning should carry on in the direction the
+# previous stroke was already travelling, instead of turning a corner.
+smooth_joins = {(a, b) for a in ["th_uv1", "dh_uv1"] for b in ["n", "ng", "sh", "zh", "f", "v"]}
+
+def _end_tangent(strokes):
+    s = strokes[-1]
+    if s[0] == 'cubic':
+        return s[5] - s[3], s[6] - s[4]
+    if s[0] == 'quadratic':
+        return s[3] - s[1], s[4] - s[2]
+    if s[0] == 'line' and len(strokes) > 1:
+        return s[1] - strokes[-2][-2], s[2] - strokes[-2][-1]
+    return 1, 0
+
+def _smooth_start(strokes, tangent):
+    """Point the first curve of strokes (which start at 0,0) along tangent."""
+    tx, ty = tangent
+    norm = sqrt(tx * tx + ty * ty) or 1
+    s = strokes[0]
+    if s[0] == 'cubic':
+        reach = sqrt(s[1] ** 2 + s[2] ** 2)
+        first_curve = ('cubic', tx / norm * reach, ty / norm * reach, s[3], s[4], s[5], s[6])
+    elif s[0] == 'quadratic':
+        reach = sqrt(s[1] ** 2 + s[2] ** 2)
+        first_curve = ('cubic', tx / norm * reach, ty / norm * reach, s[1], s[2], s[3], s[4])
+    else:
+        return strokes
+    return [first_curve] + strokes[1:]
+
+def append_glyph(out, last_char, glyph):
+    """Add one letter or ligature to the stroke list; returns the new list."""
+    forms = letter_forms if glyph in letter_forms else ligatures
+    l_kern, r_kern, n_val = pair_kerning(last_char, glyph)
+    new = l_extend(forms[glyph], r_kern)
+    if (last_char, first(glyph)) in smooth_joins:
+        new = _smooth_start(new, _end_tangent(out))
+    return concat(v_nudge(r_extend(out, l_kern), n_val), new)
