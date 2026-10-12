@@ -14,12 +14,10 @@ def test_primary_pronunciation(word, expected):
     assert grafoni.cleaner_ipa(word).replace("ˈ", "").replace("ˌ", "") == expected
 
 
-def test_the_before_vowel():
-    assert grafoni.cleaner_ipa("the man the apple") == "ðə mæn ði ˈæpəl"
-
-
-def test_close_as_verb():
-    assert grafoni.cleaner_ipa("we close the door, a close call") == "wi kloʊz ðə dɔr, ə kloʊs kɔl"
+def test_no_context_dependent_forms():
+    # A word is always written the same way, whatever surrounds it.
+    assert grafoni.cleaner_ipa("the man the apple") == "ðə mæn ðə ˈæpəl"
+    assert grafoni.cleaner_ipa("we close the door, a close call") == "wi kloʊs ðə dɔr, ə kloʊs kɔl"
 
 
 @pytest.mark.parametrize("word, expected", [
@@ -56,8 +54,15 @@ def test_th_flows_into_d():
 
 
 def test_ligature_aware_kerning():
-    assert grafoni.pair_kerning("th_uv1", "ng")[0] > 0
+    # room after th_uv1 goes on the next glyph, so the vowel arch is not flattened
+    assert grafoni.pair_kerning("th_uv1", "ng")[:2] == (-1, 2.5)
     assert grafoni.pair_kerning("s_uv1", "ng") == grafoni.pair_kerning("uv1", "ng")
+
+
+def test_t_sh_flows_together():
+    # ch (t+sh) is common; only the tall sh_l / zh_l loop needs extra room
+    assert grafoni.pair_kerning("t", "sh") == grafoni.pair_kerning("x", "y")
+    assert grafoni.pair_kerning("d", "zh_l")[0] > 0
 
 
 @pytest.mark.parametrize("word, expected", [
