@@ -976,26 +976,21 @@ def _end_tangent(strokes):
         return s[1] - strokes[-2][-2], s[2] - strokes[-2][-1]
     return 1, 0
 
-def _smooth_start(strokes, tangent):
-    """Point the first curve of strokes (which start at 0,0) along tangent."""
-    tx, ty = tangent
+def _smooth_run(strokes, length):
+    """Extend strokes by a short run that leaves in the direction the last curve
+    was travelling and levels out on the line, length units further right."""
+    tx, ty = _end_tangent(strokes)
     norm = sqrt(tx * tx + ty * ty) or 1
-    s = strokes[0]
-    if s[0] == 'cubic':
-        reach = sqrt(s[1] ** 2 + s[2] ** 2)
-        first_curve = ('cubic', tx / norm * reach, ty / norm * reach, s[3], s[4], s[5], s[6])
-    elif s[0] == 'quadratic':
-        reach = sqrt(s[1] ** 2 + s[2] ** 2)
-        first_curve = ('cubic', tx / norm * reach, ty / norm * reach, s[1], s[2], s[3], s[4])
-    else:
-        return strokes
-    return [first_curve] + strokes[1:]
+    x, y = strokes[-1][-2:]
+    lead = min(0.8, length / 2)
+    return strokes + [('cubic', x + tx / norm * lead, y + ty / norm * lead,
+                       x + length - lead, y, x + length, y)]
 
 def append_glyph(out, last_char, glyph):
     """Add one letter or ligature to the stroke list; returns the new list."""
     forms = letter_forms if glyph in letter_forms else ligatures
     l_kern, r_kern, n_val = pair_kerning(last_char, glyph)
-    new = l_extend(forms[glyph], r_kern)
     if (last_char, first(glyph)) in smooth_joins:
-        new = _smooth_start(new, _end_tangent(out))
-    return concat(v_nudge(r_extend(out, l_kern), n_val), new)
+        # keep the next letter whole (a loop stays closed); the room goes in a run before it
+        return concat(_smooth_run(out, r_kern), forms[glyph])
+    return concat(v_nudge(r_extend(out, l_kern), n_val), l_extend(forms[glyph], r_kern))

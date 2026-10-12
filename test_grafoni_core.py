@@ -107,3 +107,12 @@ def test_more_unknown_words(word, expected):
 
 def test_roman_numeral_renders_as_digits():
     assert grafoni.to_list("XIV") == ["1", "4"]
+
+
+def test_ng_loop_stays_closed_after_th_vowel():
+    # "writhing": the room before ng goes in a run, so the loop ends where it began
+    out = grafoni.append_glyph([('move', 0, 0)], " ", "dh_uv1")
+    joined = grafoni.append_glyph(out, "dh_uv1", "ng")
+    loop = joined[len(out) + 1:]
+    start = joined[len(out)][-2:]
+    assert loop[-1][-2:] == pytest.approx(start)
