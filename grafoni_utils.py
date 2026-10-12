@@ -14,20 +14,10 @@ def _visual_x(strokes, shear_val, v_scale):
 
 def _append_glyph(out, last_char, glyph):
     """Append one letter/ligature glyph to the stroke list."""
-    if glyph in grafoni.letter_forms:
-        forms = grafoni.letter_forms
-    elif glyph in grafoni.ligatures:
-        forms = grafoni.ligatures
-    else:
+    if glyph not in grafoni.letter_forms and glyph not in grafoni.ligatures:
         print("Unsupported Character: " + glyph)
         return out, last_char
-
-    l_kern, r_kern, n_val = grafoni.pair_kerning(last_char, glyph)
-    new_out = grafoni.concat(
-        grafoni.v_nudge(grafoni.r_extend(out, l_kern), n_val),
-        grafoni.l_extend(forms[glyph], r_kern),
-    )
-    return new_out, glyph
+    return grafoni.append_glyph(out, last_char, glyph), glyph
 
 
 def _append_glyphs(out, last_char, glyphs):

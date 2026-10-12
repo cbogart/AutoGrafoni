@@ -41,7 +41,8 @@ CASES = [
         ("dyne quixotic cyclic jazzy", "letter rules: no bare c, q, x or y glyphs"),
         ("Nerado Nevian Triplanetario", "invented names: letter-rule guesses"),
         ("complacence dirigible declination", "soft c, -ble, -tion endings"),
-        ("DNA NASA XYZ Br", "DNA spelled (dictionary); NASA said; XYZ, Br spelled out"),
+        ("DNA FBI NASA XYZ Br", "Latin letters, except NASA (said as a word)"),
+        ("I AM HERE, OK?", "all-caps words stay Grafoni; OK is letters"),
     ]),
     ("Numerals", [
         ("Chapter XIV, Henry VIII, 1913", "Roman numerals become Grafoni digits"),
@@ -54,9 +55,9 @@ CASES = [
     ]),
     ("Joins and spacing", [
         ("withdrawn withdrew bathed", "th/dh rise straight into d, no flat gap"),
-        ("things nothing nothingness", "i keeps its arch; ng loop clears the th stroke"),
+        ("things nothing nothingness", "i arch flows smoothly into ng; short run between ng and n"),
         ("watched church H", "t+sh flows together with no hitch"),
-        ("savagely strangely", "a little room before the tall zh+l loop"),
+        ("savagely strangely freshly", "d flows into zh; narrow l loop clears the d"),
         ("transmitter endured", "s and m don't collide; d and u visible"),
     ]),
 ]
