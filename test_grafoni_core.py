@@ -26,7 +26,6 @@ def test_no_context_dependent_forms():
     ("dyne", "daɪn"),             # letter rules: y, silent e
     ("sux", "səks"),              # x -> ks, never the velar-fricative glyph
     ("quaq", "kwæk"),             # q -> k
-    ("XYZ", "ɛkswaɪzi"),          # unknown acronym spelled out
 ])
 def test_unknown_words(word, expected):
     assert grafoni.cleaner_ipa(word).replace("ˈ", "").replace("ˌ", "") == expected
@@ -60,14 +59,44 @@ def test_ligature_aware_kerning():
 
 
 def test_t_sh_flows_together():
-    # ch (t+sh) is common; only the tall sh_l / zh_l loop needs extra room
-    assert grafoni.pair_kerning("t", "sh") == grafoni.pair_kerning("x", "y")
-    assert grafoni.pair_kerning("d", "zh_l")[0] > 0
+    # ch (t+sh) and j (d+zh) are common and must join without extra room
+    for a, b in [("t", "sh"), ("d", "zh"), ("d", "zh_l"), ("t", "sh_l")]:
+        assert grafoni.pair_kerning(a, b) == grafoni.pair_kerning("x", "y")
+
+
+def test_ng_n_separated():
+    assert grafoni.pair_kerning("ng", "n")[1] > 0
+
+
+def test_th_vowel_arch_flows_into_loop():
+    # the room before ng follows the arch's downward direction rather than starting flat
+    out = grafoni.append_glyph([('move', 0, 0)], " ", "th_uv1")
+    joined = grafoni.append_glyph(out, "th_uv1", "ng")
+    first_ng_curve = joined[len(out)]
+    assert first_ng_curve[0] == 'cubic' and first_ng_curve[2] > out[-1][-1]
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("DNA", ["L-D", "L-N", "L-A"]),      # said letter by letter: Latin letters
+    ("FBI", ["L-F", "L-B", "L-I"]),
+    ("XYZ", ["L-X", "L-Y", "L-Z"]),      # unknown short acronym
+    ("Br", ["L-B", "L-R"]),              # no vowels
+])
+def test_acronyms_as_latin_letters(text, expected):
+    assert grafoni.to_list(text) == expected
+
+
+def test_spoken_acronym_uses_pronunciation():
+    assert not any(g.startswith("L-") for g in grafoni.to_list("NASA"))
+
+
+def test_all_caps_words_stay_grafoni():
+    # AM's dictionary primary is the word, not the letters
+    assert not any(g.startswith("L-") for g in grafoni.to_list("I AM HERE"))
 
 
 @pytest.mark.parametrize("word, expected", [
     ("XIV", "14"), ("VIII", "8"),          # Roman numerals -> Grafoni digits
-    ("Br", "biɑr"),                         # no vowels: abbreviation, spelled out
     ("complacence", "kɑmplæsɛns"),          # soft c before silent e
     ("declination", "dɛklɪnæʃən"),
     ("dirigible", "dərɪgɪbəl"),
