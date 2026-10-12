@@ -323,22 +323,27 @@ kerning[("zh","m")] = (-1,1)
 kerning[("m","sh")] = (1,-1)
 kerning[("m","zh")] = (1,-1)
 
-# a little room before a downward loop that would otherwise sit on the t/d stem ("savagely", "strangely")
+# a little room before the tall sh/zh+l loop, which otherwise sits on the t/d stem
+# ("savagely", "strangely"); plain t+sh and d+zh keep flowing together.
 for _a in ["t","d"]:
-    for _b in ["sh","zh"]:
+    for _b in ["sh_l","zh_l"]:
         kerning[(_a,_b)] = (1,-1)
 # s/z followed by m without the s_m ligature (e.g. after n_s in "transmitter")
 kerning[("s","m")] = (1,-1)
 kerning[("z","m")] = (1,-1)
-# keys may also name a whole ligature on the left; these keep the th/dh descender clear of a following loop ("nothingness")
+# keys may also name a whole ligature; these keep the th/dh descender clear of a following loop ("nothingness").
+# The room goes on the right-hand glyph: extending th_uv1 itself would flatten the vowel's arch.
 for _a in ["th_uv1","dh_uv1"]:
     for _b in ["n","ng","sh","zh","f","v"]:
-        kerning[(_a,_b)] = (2.5,-1)
+        kerning[(_a,_b)] = (-1,2.5)
 
 def pair_kerning(last_char, glyph):
-    """(left kern, right kern, nudge) between the previous glyph and the next one."""
-    key = (last_char, first(glyph))
-    if key not in kerning:
+    """(left kern, right kern, nudge) between the previous glyph and the next one.
+    The most specific kerning entry wins: whole ligature names first, then their outer letters."""
+    for key in [(last_char, glyph), (last_char, first(glyph)), (last(last_char), glyph)]:
+        if key in kerning:
+            break
+    else:
         key = (last(last_char), first(glyph))
     return kerning[key] + (nudge_kern[(last(last_char), first(glyph))],)
 
@@ -492,17 +497,6 @@ def cmu_variants(word):
 pronunciation_overrides = {
     "us": "əs",
 }
-
-# Heteronyms whose pronunciation follows part of speech: (noun/adjective form, verb form).
-# The verb form is used after a word that usually precedes a verb.
-heteronyms = {
-    "close": ("kloʊs", "kloʊz"),
-    "use": ("jus", "juz"),
-    "excuse": ("ɪkskjus", "ɪkskjuz"),
-    "abuse": ("əbjus", "əbjuz"),
-}
-verb_cues = {"to", "will", "would", "could", "should", "shall", "can", "must", "might", "may",
-             "did", "do", "does", "don't", "didn't", "won't", "i", "we", "you", "they", "let's", "please"}
 
 letter_names = {
     "a": "eɪ", "b": "bi", "c": "si", "d": "di", "e": "i", "f": "ɛf", "g": "ʤi", "h": "eɪʧ",
@@ -689,19 +683,8 @@ def cleaner_ipa(in_string):
         m = re.match(r"^([^A-Za-z0-9]*)(.*?)([^A-Za-z0-9]*)$", tok)
         words.append(m.groups())
     out = []
-    for i, (before, word, after) in enumerate(words):
-        lower = word.lower()
-        prev = words[i - 1][1].lower() if i > 0 and not words[i - 1][2] else ""
-        nxt = words[i + 1][1] if i + 1 < len(words) and not after else ""
-        if not word:
-            sound = ""
-        elif lower == "the":
-            following = lookup_word(nxt) if nxt else ""
-            sound = "ði" if following.lstrip("ˈˌ")[:1] in IPA_VOWELS else "ðə"
-        elif lower in heteronyms:
-            sound = heteronyms[lower][1 if prev in verb_cues else 0]
-        else:
-            sound = lookup_word(word)
+    for before, word, after in words:
+        sound = lookup_word(word) if word else ""
         out.append(before + sound + after)
     return " ".join(out)
 
