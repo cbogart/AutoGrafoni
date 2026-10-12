@@ -109,3 +109,15 @@ def test_more_unknown_words(word, expected):
 def test_roman_numeral_renders_as_digits():
     assert grafoni.to_list("XIV") == ["1", "4"]
 
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("mit", "mɪt"), ("Mit", "mɪt"),   # a word that is also an acronym in the dictionary
+    ("id", "ɪd"),
+])
+def test_lowercase_word_is_not_an_acronym(text, expected):
+    assert grafoni.cleaner_ipa(text) == expected
+
+
+def test_capitalised_acronym_still_letters():
+    assert grafoni.to_list("MIT") == ["L-M", "L-I", "L-T"]
