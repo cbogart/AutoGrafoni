@@ -657,15 +657,20 @@ def lookup_word(word, depth=0, guess=True):
     if lower.isdigit():
         return lower
     variants = cmu_variants(lower)
+    spelled = "".join(letter_names.get(c, "?") for c in lower)
+    def is_spelled(v):
+        return v.replace("ˈ", "").replace("ˌ", "") == spelled
     if word.isupper() and len(word) >= 2 and word.isalpha():
-        spelled = "".join(letter_names[c] for c in lower)
-        if variants and variants[0].replace("ˈ", "").replace("ˌ", "") == spelled:
+        if variants and is_spelled(variants[0]):
             return latin(word)  # said letter by letter (DNA, FBI): write the letters
         if not variants:
             if re.fullmatch(r"M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})", word):
                 return str(roman_to_int(word))  # written with Grafoni digits
             if len(word) <= 5:
                 return latin(word)  # unknown acronym
+    if not word.isupper() and any(not is_spelled(v) for v in variants):
+        # Not written in capitals, so not an acronym: "mit" is mɪt, not M.I.T.
+        variants = [v for v in variants if not is_spelled(v)]
     if variants:
         # Where the dictionary also records an ɔ form ("bought", "caught"), keep that distinction.
         open_o = variants[0].replace("ɑ", "ɔ")
